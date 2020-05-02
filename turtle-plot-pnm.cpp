@@ -511,7 +511,7 @@ if (false) {
              As we will see, this has several advantages.
              Here is our new glyph sequence loader.
             */
-            #define MAX_GLYPHS 321
+            #define MAX_GLYPHS 4321
             //FT_GlyphSlot  slot = face->glyph;  /* a small shortcut */
             FT_Bool       use_kerning;
             FT_UInt       previous;
@@ -564,11 +564,20 @@ if (false) {
             previous    = 0;
             
             glyph = glyphs;
+    bool debug_freetype = false;
 /* ... load glyph sequence ... */
     for ( n = 0; n < num_chars; n++ ) {
       FT_ULong buchstabe = ein32wort[n];
-              glyph->index = FT_Get_Char_Index( face, buchstabe /*text[n]*/ );
-//    cout << "B010 buchstabe " << hex << buchstabe << " glyph->index " << glyph->index << endl;
+      glyph->index = FT_Get_Char_Index( face, buchstabe /*text[n]*/ );
+      if (debug_freetype)
+        cerr
+          << "B010"
+          << " n"                 << setw(3) << n
+          << " buchstabe " << hex << setw(3) << buchstabe
+          << " glyph->index "     << setw(3) << glyph->index
+          << " pen_x " << dec     << setw(3) << pen_x
+          << endl
+          ;
             
               if ( use_kerning && previous && glyph->index ) {
                 FT_Vector  delta;
@@ -636,7 +645,16 @@ for ( n = 0; n < num_glyphs; n++ ) {
   /* create a copy of the original glyph */
   FT_Glyph image;
   error = FT_Glyph_Copy( glyphs[n].image, &image );
-  if ( error ) continue;
+  if ( error ) {
+    if (debug_freetype)
+      cerr
+        << "B020"
+        << " n"                 << setw(3) << dec << n
+        << " glyphs[n].index "  << setw(3) << hex << glyphs[n].index
+        << endl;
+
+    continue;
+  }
 
   /* transform copy (this will also translate it to the */
   /* correct position                                   */
@@ -646,9 +664,19 @@ for ( n = 0; n < num_glyphs; n++ ) {
   /* is not in our target surface, we can avoid rendering it */
   FT_BBox  bbox;
   FT_Glyph_Get_CBox( image, ft_glyph_bbox_pixels, &bbox );
-  if ( bbox.xMax <= 0 || bbox.xMin >= target_textfenster_width  ||
-       bbox.yMax <= 0 || bbox.yMin >= target_textfenster_height )
+  if ( bbox.xMax < 0 || bbox.xMin >= target_textfenster_width  ||
+       bbox.yMax < 0 || bbox.yMin >= target_textfenster_height ) { // bbox.xMax <= 0 lässt Leerschritte verschwinden 
+    if (debug_freetype)
+      cerr
+        << "B021"
+        << " n"                 << setw(3) << dec << n
+        << " glyphs[n].index "  << setw(3) << hex << glyphs[n].index
+        << " bbox.xMin "        << setw(3) << dec << bbox.xMin 
+        << " bbox.xMax "        << setw(3) << dec << bbox.xMax 
+        << endl;
+
     continue;
+  }
 
   /* convert glyph image to bitmap (destroy the glyph copy!) */
   error = FT_Glyph_To_Bitmap(
@@ -660,6 +688,15 @@ for ( n = 0; n < num_glyphs; n++ ) {
     FT_BitmapGlyph  bit = (FT_BitmapGlyph)image;
 
     /* now, draw to our target surface (convert position) */
+      if (debug_freetype)
+        cerr
+          << "B022"
+          << " n"                 << setw(3) << dec << n
+          << " glyphs[n].index "  << setw(3) << hex << glyphs[n].index
+          << " bit->left "        << setw(3) << dec << bit->left
+          << " bit->top "         << setw(3) << dec << bit->top
+          << endl;
+            
     draw_bitmap_nach_textfenster( &(bit->bitmap),
                  bit->left,
                  target_textfenster_height - bit->top );
@@ -934,159 +971,6 @@ for ( n = 0; n < num_glyphs; n++ ) {
     return 0;
   }
   
-  int main33(
-      const char *textfenster_filename,
-      u32string ein32wort,
-      double xpos, double ypos, double winkel_deg
-      ) {
-    FT_Library    library;
-    FT_Face       face;
-  
-    FT_GlyphSlot  slot;
-    FT_Matrix     matrix;                 /* transformation matrix */
-    FT_Vector     pen;                    /* untransformed origin  */
-    FT_Error      error;
-  
-    double        angle;
-    int           target_textfenster_height;
-    int           n, num_chars;
-  
-  int vierundsechzig = 64;
-
-    num_chars     = ein32wort.size();
-    angle         = ( winkel_deg / 360 ) * 3.14159 * 2;      /* use 25 degrees     */
-    target_textfenster_height = this->textfenster_height;
-  
-    error = FT_Init_FreeType( &library );                    /* initialize library */
-               if (error!=0) { fprintf( stderr, "error=%d FT_Init_FreeType\n", error); return errno; }
-    error = FT_New_Face( library, textfenster_filename, 0, &face );   /* create face object */
-               if (error!=0) { fprintf( stderr, "error=%d FT_New_Face\n", error); return errno; }
-    if (false) cout
-      << "M010"
-      << " face->ascender= " << face->ascender
-      << " face->descender= " << face->descender
-      << " face->height= " << face->height
-      << endl;           
-               /* use 50pt at 100dpi */
-    error = FT_Set_Char_Size( face, this->points * vierundsechzig, 0, this->dpi, 0 );  /* set character size */
-               if (error!=0) { fprintf( stderr, "error=%d FT_Set_Char_Size\n", error); return errno; }
-    /* cmap selection omitted;                                        */
-    /* for simplicity we assume that the font contains a Unicode cmap */
-  
-    slot = face->glyph;
-  
-    /* set up matrix */
-    matrix.xx = (FT_Fixed)( cos( angle ) * 0x10000L );
-    matrix.xy = (FT_Fixed)(-sin( angle ) * 0x10000L );
-    matrix.yx = (FT_Fixed)( sin( angle ) * 0x10000L );
-    matrix.yy = (FT_Fixed)( cos( angle ) * 0x10000L );
-  
-    /* the pen position in 26.6 cartesian space coordinates; */
-    /* start at (300,200) relative to the upper left corner  */
-    /* start at (xpos,ypos) relative to the upper left corner  */
-    pen.x = xpos * vierundsechzig;
-    pen.y = ( target_textfenster_height - ypos ) * vierundsechzig;
-  
-                int max_descent = 0, max_ascent = 0;
-
-                struct worte_mit_masz {
-                  int        ascent;
-                  FT_ULong   buchstabe;
-                  FT_Int     slot_bitmap_left;
-                  FT_Int     target_textfenster_height_minus_slot_bitmap_top;
-                  FT_Bitmap* slot_bitmap_addr;
-                };
-                vector<worte_mit_masz> wort_mit_masz;
-
-    for ( n = 0; n < num_chars; n++ ) {
-      FT_ULong buchstabe = ein32wort[n];
-             /* set transformation */
-      FT_Set_Transform( face, &matrix, &pen );
-  
-      /* load glyph image into the slot (erase previous one) */
-      error = FT_Load_Char( face, buchstabe, FT_LOAD_RENDER ); /* Ergebnis in face, verwende nur face->glyph als slot */
-                        if ( error ) continue;                 /* ignore errors */
-  
-                int descent = 0, ascent = 0, ascent_calc;
-                int rows_minus_top = slot->bitmap.rows - slot->bitmap_top;
-                if (descent < rows_minus_top) {descent = rows_minus_top; }
-                if (slot->bitmap_top < slot->bitmap.rows) {
-                    ascent_calc = slot->bitmap.rows;
-                } else {
-                    ascent_calc = slot->bitmap_top;
-                }
-                int ascent_calc_minus_descent = ascent_calc - descent;
-                if (ascent < ascent_calc_minus_descent) { ascent = ascent_calc_minus_descent; }
-   
-                if (max_ascent  < ascent ) { max_ascent  = ascent;  }
-                if (max_descent < descent) { max_descent = descent; }
-   
-                struct worte_mit_masz ein_wort_mit_masz;
-                ein_wort_mit_masz.ascent = ascent;
-                ein_wort_mit_masz.buchstabe = buchstabe;
-                ein_wort_mit_masz.slot_bitmap_addr = &slot->bitmap;
-                ein_wort_mit_masz.slot_bitmap_left = slot->bitmap_left;
-                ein_wort_mit_masz.target_textfenster_height_minus_slot_bitmap_top = target_textfenster_height -  slot->bitmap_top;
-                wort_mit_masz.push_back( ein_wort_mit_masz);
-   
-                
-                cout
-                  << "M011"
-                  << " buchstabe= "   << hex << buchstabe << dec
-                  << " width= "       << setw(4) << slot->bitmap.width
-                  << " rows= "        << setw(4) << slot->bitmap.rows
-                  << " top= "         << setw(4) << slot->bitmap_top
-                  << " descent= "     << setw(4) << descent
-                  << " ascent= "      << setw(4) << ascent
-                  << " max_descent= " << setw(4) << max_descent
-                  << " max_ascent= "  << setw(4) << max_ascent
-                  << endl;
-
-//    pen.y = max_ascent + max_descent - ascent - max_descent;
-
-      /* now, draw to our target surface (convert position) */
-      draw_bitmap_nach_textfenster( &slot->bitmap,
-                                        slot->bitmap_left,
-                   target_textfenster_height -  slot->bitmap_top   );
- 
-      /* increment pen position */
-      pen.x += slot->advance.x;
-      pen.y += slot->advance.y;
-    }
-    cout << "M012 " << wort_mit_masz.size() << endl;
-    pen.x = xpos * vierundsechzig;
-    pen.y = ( target_textfenster_height - ypos ) * vierundsechzig;
-    for ( int ii=0; ii<wort_mit_masz.size(); ii++) {
-      cout
-        << "M013"
-        << " buchstabe " << hex << wort_mit_masz[ii].buchstabe << dec
-        << " ascent "    << setw(4) << wort_mit_masz[ii].ascent
-        << " advance.x " << setw(4) << slot->advance.x/64
-        << endl;
-      FT_Set_Transform( face, &matrix, &pen );
-      error = FT_Load_Char( face, wort_mit_masz[ii].buchstabe, FT_LOAD_RENDER ); /* Ergebnis in face, verwende nur face->glyph als slot */
-                 if ( error ) continue;                 /* ignore errors */
-      /* now, draw to our target surface (convert position) */
-      draw_bitmap_nach_textfenster( &slot->bitmap,
-                                        slot->bitmap_left  +55,
-                   target_textfenster_height -  slot->bitmap_top   -155);
-  
-      /* increment pen position */
-      pen.x += slot->advance.x + 100*64;
-      pen.y += slot->advance.y;
-    }
-
-  
-    plot3_von_textfenster_nach_tbild_monochrom();
-  //plot3_textfenster();
-  //show_textfenster_as_ascii_graphik();
-  
-    FT_Done_Face    ( face );
-    FT_Done_FreeType( library );
-  
-    return 0;
-  }
-
 };
 
 #define SIGN(arg) (arg?arg>0?1:-1:0)
@@ -2605,7 +2489,7 @@ struct chromosom;
     mein_chromosom.add( "Y"    , );
     mein_chromosom.add( "F"    , );
     mein_chromosom.add(            );
-    clear_grafik( 0); clear_text(); tiefe =  ; turnto( 0.0); skalierung = 1.0;  breite = ;
+    tiefe =  ; turnto( 0.0); skalierung = 1.0;  breite = ; clear_grafik( 0); clear_text();
     zeichneC( , tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-001a.pnm", U" C 002a");
 
 */
@@ -2615,15 +2499,15 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "X+YF+");
     mein_chromosom.add( "Y"    , "-FX-Y");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 7; turnto( 0.0); skalierung = 1.0  ;  breite =   2.85;
-    clear_grafik( 0); clear_text(); tiefe = 7; turnto( 0.0); skalierung = 0.5  ;  breite = 800.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 5; turnto( 0.0); skalierung = 0.5  ;  breite = 200.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 0.5  ;  breite =  50.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 2; turnto( 0.0); skalierung = 0.5  ;  breite =  25.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 1; turnto( 0.0); skalierung = 0.5  ;  breite =  25.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 0; turnto( 0.0); skalierung = 0.5  ;  breite =   6.25 ;
-    clear_grafik( 0); clear_text(); tiefe = 8; turnto( 0.0); skalierung = 0.5  ;  breite = 800.0  ;
-    clear_grafik( 0); clear_text(); tiefe = 8; turnto( 0.0); skalierung = 0.713;  breite = 100.0  ;
+    tiefe = 7; turnto( 0.0); skalierung = 1.0  ;  breite =   2.85; clear_grafik( 0); clear_text();
+    tiefe = 7; turnto( 0.0); skalierung = 0.5  ;  breite = 800.0  ; clear_grafik( 0); clear_text();
+    tiefe = 5; turnto( 0.0); skalierung = 0.5  ;  breite = 200.0  ; clear_grafik( 0); clear_text();
+    tiefe = 3; turnto( 0.0); skalierung = 0.5  ;  breite =  50.0  ; clear_grafik( 0); clear_text();
+    tiefe = 2; turnto( 0.0); skalierung = 0.5  ;  breite =  25.0  ; clear_grafik( 0); clear_text();
+    tiefe = 1; turnto( 0.0); skalierung = 0.5  ;  breite =  25.0  ; clear_grafik( 0); clear_text();
+    tiefe = 0; turnto( 0.0); skalierung = 0.5  ;  breite =   6.25 ; clear_grafik( 0); clear_text();
+    tiefe = 8; turnto( 0.0); skalierung = 0.5  ;  breite = 800.0  ; clear_grafik( 0); clear_text();
+    tiefe = 8; turnto( 0.0); skalierung = 0.713;  breite = 100.0  ; clear_grafik( 0); clear_text();
     zeichneC( 48.0, 68.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-001a.pnm", U"dragon C 001a");
 
 }
@@ -2632,7 +2516,7 @@ if (alle_bilder) {
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "-F+F+F-F +-F+F+F-F +-F+F+F-F +-F+F+F-F +-F+F+F-F ");
     mein_chromosom.add( 72.0       );
-    clear_grafik( 0); clear_text(); tiefe = 2; turnto( 0.0); skalierung = 1.0;  breite = 5.0;
+    tiefe = 2; turnto( 0.0); skalierung = 1.0;  breite = 5.0; clear_grafik( 0); clear_text();
     zeichneC( 72.0, 48.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-002a.pnm", U"fünfeckig C 002a");
 
     mein_chromosom.clear();
@@ -2641,15 +2525,15 @@ if (alle_bilder) {
     mein_chromosom.add( "G"    , "F-G+H");
     mein_chromosom.add( "H"    , "F-G+H");
     mein_chromosom.add( 120.0      );
-    clear_grafik( 0); clear_text(); tiefe = 6; turnto( 0.0); skalierung = 0.5;  breite = 148.0;
+    tiefe = 6; turnto( 0.0); skalierung = 0.5;  breite = 148.0; clear_grafik( 0); clear_text();
     zeichneC( 120.0,  75.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-003a.pnm", U"Dreiecke C 003a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+XF+F+XF");
     mein_chromosom.add( "X"    , " (XF-F+F-XF+F+XF-F+F-X) ");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite =  1.76;  // echo 'a=1.76;f=0.5; a/(f^4)' | bc -l
-    clear_grafik( 0); clear_text(); tiefe = 5; turnto( 0.0); skalierung = 0.5;  breite = 28.16;
+    tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite =  1.76;  // echo 'a=1.76;f=0.5; a/(f^4)' | bc -l clear_grafik( 0); clear_text();
+    tiefe = 5; turnto( 0.0); skalierung = 0.5;  breite = 28.16; clear_grafik( 0); clear_text();
     zeichneC( 96.0,  0.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-004a.pnm", U"Wacław Sierpiński - Quadrate C 004a");
 
     mein_chromosom.clear();
@@ -2657,8 +2541,8 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , " (XFYFX+F+YFXFY-F-XFYFX) ");
     mein_chromosom.add( "Y"    , "YFXFY-F-XFYFX+F+YFXFY");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 1.0 ;  breite =  1.2;
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.35;  breite = 80.0;
+    tiefe = 4; turnto( 0.0); skalierung = 1.0 ;  breite =  1.2; clear_grafik( 0); clear_text();
+    tiefe = 4; turnto( 0.0); skalierung = 0.35;  breite = 80.0; clear_grafik( 0); clear_text();
     zeichneC( 48.0,  10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-005a.pnm", U"Peano-Kurve C 005a");
 
     mein_chromosom.clear();
@@ -2666,9 +2550,9 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , " (X+YF++YF-FX--FXFX-YF+X) ");
     mein_chromosom.add( "Y"    , " (-FX+YFYF++YF+FX--FX-YF) ");
     mein_chromosom.add( 45.0       );
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 1.0;  breite =  0.35; // drei Varianten mit gleichem Ergebnis
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 0.5;  breite =  2.80;
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 0.3;  breite = 12.96;
+    tiefe = 3; turnto( 0.0); skalierung = 1.0;  breite =  0.35; // drei Varianten mit gleichem Ergebnis clear_grafik( 0); clear_text();
+    tiefe = 3; turnto( 0.0); skalierung = 0.5;  breite =  2.80; clear_grafik( 0); clear_text();
+    tiefe = 3; turnto( 0.0); skalierung = 0.3;  breite = 12.96; clear_grafik( 0); clear_text();
     zeichneC( 144.0,  20.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-006a.pnm", U"Hasan Hosam Schneeflocke C 006a");
 
     mein_chromosom.clear();
@@ -2677,8 +2561,7 @@ if (alle_bilder) {
     mein_chromosom.add( "Y"    , " (XF-YF-X) ");
     mein_chromosom.add( 60.0       );
 
-}
-    clear_grafik( 0); clear_text(); tiefe = 1; turnto( 0.0); skalierung = 0.5;  breite = 100.0;
+    tiefe = 1; turnto( 0.0); skalierung = 0.5;  breite = 100.0; clear_grafik( 0); clear_text();
     zeichneC( 8.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-007a-1.pnm", U"Wacław_Sierpiński Dreieck - Arrowhead - Pfeilspitze C 007a 1");
     clear_text(); tiefe = 3; turnto( 0.0);
     zeichneC( 8.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-007a-1-3.pnm", U"Wacław Sierpiński Dreieck - Arrowhead - Pfeilspitze C 007a 1 3");
@@ -2687,7 +2570,7 @@ if (alle_bilder) {
     clear_text(); tiefe = 7; turnto( 0.0);
     zeichneC( 8.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-007a-1-3-5-7.pnm", U"Wacław Sierpiński Dreieck - Arrowhead - Pfeilspitze C 007a 1 3 5 7");
 
-    clear_grafik( 0); clear_text(); tiefe = 2; turnto( 180.0); skalierung = 0.5;  breite = 100.0;
+    tiefe = 2; turnto( 180.0); skalierung = 0.5;  breite = 100.0; clear_grafik( 0); clear_text();
     zeichneC( 108.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-007a-2.pnm", U"Wacław Sierpiński Dreieck - Arrowhead - Pfeilspitze C 007a 2");
     tiefe = 4; turnto( 180.0);
     clear_text(); zeichneC( 108.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-007a-2-4.pnm", U"Wacław Sierpiński Dreieck - Arrowhead - Pfeilspitze C 007a 2 4");
@@ -2700,64 +2583,65 @@ if (alle_bilder) {
     mein_chromosom.add( "axiom", "F++F++F");
     mein_chromosom.add( "F"    , "F-F++F-F");
     mein_chromosom.add( 60.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.3;  breite = 120.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.3;  breite = 120.0; clear_grafik( 0); clear_text();
     zeichneC( 48.0,  30.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-008a.pnm", U"Wacław Sierpiński Dreieck - Arrowhead - Pfeilspitze C 008a");
 
+}
 if (alle_bilder) {
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , " (FF+F++F+F)");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 7; turnto( 0.0); skalierung = 0.3;  breite = 180.0;
+    tiefe = 7; turnto( 0.0); skalierung = 0.3;  breite = 180.0; clear_grafik( 0); clear_text();
     zeichneC( 64.0, 8.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-009a.pnm", U"Paul Bourke - Crystal C 009a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "F-F+F+F-F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 170.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 170.0; clear_grafik( 0); clear_text();
     zeichneC( 14.0, 90.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-010a.pnm", U"Paul Bourke - Crystal C 10a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "FF");
     mein_chromosom.add( "F"    , "F+F-F-F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0; clear_grafik( 0); clear_text();
     zeichneC( 50.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-011-1.pnm", U"Hasan Hosam - Crystal C 11-1 FF");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "FF+FF");
     mein_chromosom.add( "F"    , "F+F-F-F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0; clear_grafik( 0); clear_text();
     zeichneC( 50.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-011-2.pnm", U"Hasan Hosam - Crystal C 11-2 FF+FF");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "FF+FF+F");
     mein_chromosom.add( "F"    , "F+F-F-F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0; clear_grafik( 0); clear_text();
     zeichneC( 50.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-011-3.pnm", U"Hasan Hosam - Crystal C 11-3 FF+FF+F");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "F+F-F-F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0; clear_grafik( 0); clear_text();
     zeichneC( 50.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-011-4.pnm", U"Hasan Hosam - Crystal C 11-4 F");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "FF+FF+FF+FF");
     mein_chromosom.add( "F"    , "F+F-F-F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.33;  breite = 40.0; clear_grafik( 0); clear_text();
     zeichneC( 50.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-011-5.pnm", U"Hasan Hosam - Crystal C 11-5 FF+FF+FF+FF");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "F+F-F-FFF+F+F-F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 0.33;  breite = 20.0;
+    tiefe = 3; turnto( 0.0); skalierung = 0.33;  breite = 20.0; clear_grafik( 0); clear_text();
     zeichneC( 65.0, 50.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-012-a.pnm", U"Paul Bourke - Quadratic Koch Island C 12a");
 
 }
@@ -2765,7 +2649,7 @@ if (alle_bilder) {
     mein_chromosom.add( "axiom", "FXXXXXXXX----F----");
     mein_chromosom.add( "X"    , "(----F----+F)");
     mein_chromosom.add( 45.0       );
-    clear_grafik( 0); clear_text(); tiefe = 2; turnto( 0.0); skalierung = 1.0;  breite = 20.0;
+    tiefe = 2; turnto( 0.0); skalierung = 1.0;  breite = 20.0; clear_grafik( 0); clear_text();
     zeichneC( 171.0, 86.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-013-a.pnm", U"Sternchen^ C 13a");
     zeichneC(  21.0, 21.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-013-a.pnm", U"Sternchen. C 13a");
 
@@ -2774,7 +2658,7 @@ if (alle_bilder) {
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "F-FF+FF+F+F-F-FF+F+F-F-FF-FF+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 2; turnto( 0.0); skalierung = 0.3;  breite = 16.0;
+    tiefe = 2; turnto( 0.0); skalierung = 0.3;  breite = 16.0; clear_grafik( 0); clear_text();
     zeichneC( 75.0, 28.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-014-a.pnm", U"Paul Bourke - Quadratic Koch Island C 14a");
 
     mein_chromosom.clear();
@@ -2782,35 +2666,35 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "X+YF++YF-FX--FXFX-YF+X");
     mein_chromosom.add( "Y"    , "-FX+YFYF++YF+FX--FX-YF");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.35;  breite = 64.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.35;  breite = 64.0; clear_grafik( 0); clear_text();
     zeichneC( 75.0, 87.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-015-a.pnm", U"Hasan Hosam - Quadratic Koch Island C 15a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "FF+F+F+F+FF");
     mein_chromosom.add( 90.0           );
-    clear_grafik( 0); clear_text(); tiefe = 5; turnto( 0.0); skalierung = 0.3;  breite = 100.0;
+    tiefe = 5; turnto( 0.0); skalierung = 0.3;  breite = 100.0; clear_grafik( 0); clear_text();
     zeichneC( 85.0, 8.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-016-a.pnm", U"Paul Bourke - Board C 16a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "F+FF++F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 7; turnto( 0.0); skalierung = 0.5;  breite = 18.0;
+    tiefe = 7; turnto( 0.0); skalierung = 0.5;  breite = 18.0; clear_grafik( 0); clear_text();
     zeichneC( 138.0, 78.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-017-a.pnm", U"Paul Bourke - Cross C 17a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "F+F-F+F+F");
     mein_chromosom.add( 90.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.40;  breite = 100.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.40;  breite = 100.0; clear_grafik( 0); clear_text();
     zeichneC( 66.0, 23.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-018-a.pnm", U"Paul Bourke - Cross 2 C 18a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F++F++F++F++F");
     mein_chromosom.add( "F"    , "F++F++F|F-F++F");
     mein_chromosom.add( 36.0       );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite = 1.2;
+    tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite = 1.2; clear_grafik( 0); clear_text();
     zeichneC( 68.0, 10.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-019-a.pnm", U"Pentaplexity C 19a");
 
     gerundet = true;
@@ -2819,7 +2703,7 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "X+YF+");
     mein_chromosom.add( "Y"    , "-FX-Y");
     mein_chromosom.add( 90.0           );
-    clear_grafik( 0); clear_text(); tiefe = 6; turnto( 0.0); skalierung = 1.0;  breite = 7.0;
+    tiefe = 6; turnto( 0.0); skalierung = 1.0;  breite = 7.0; clear_grafik( 0); clear_text();
     zeichneC( 128.0, 75.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-020-a.pnm", U"Dragon C 20a");
     gerundet = false;
 
@@ -2827,7 +2711,7 @@ if (alle_bilder) {
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "FF+F-F+F+FF");
     mein_chromosom.add( 90.0           );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 0.86;  breite = 3.0;
+    tiefe = 4; turnto( 0.0); skalierung = 0.86;  breite = 3.0; clear_grafik( 0); clear_text();
     zeichneC( 80.0, 31.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-022-a.pnm", U"Tiles C 22a");
 
     mein_chromosom.clear();
@@ -2838,7 +2722,7 @@ if (alle_bilder) {
     mein_chromosom.add( "Y"    , "->F-<F--FF--F->F<-");
     mein_chromosom.add( 45.0           );
     mein_chromosom.add( "skafak", 1.4142     );
-    clear_grafik( 0); clear_text(); tiefe = 2 ; turnto( 0.0); skalierung = 1.0;  breite = 21.0;  breite = 5.0;
+    tiefe = 2 ; turnto( 0.0); skalierung = 1.0;  breite = 21.0;  breite = 5.0; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 54.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-021-a.pnm", U"fünfeckige Berliner Gehwegplatte C 21a");
 
     mein_chromosom.clear();
@@ -2846,7 +2730,7 @@ if (alle_bilder) {
     mein_chromosom.add( "F"    , "->F-<F--FF--F->F<-");
     mein_chromosom.add( 45.0           );
     mein_chromosom.add( "skafak", 1.4142     );
-    clear_grafik( 0); clear_text(); tiefe = 2 ; turnto( 0.0); skalierung = 1.0;  breite = 21.0;  breite = 5.0;
+    tiefe = 2 ; turnto( 0.0); skalierung = 1.0;  breite = 21.0;  breite = 5.0; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 54.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-021-b.pnm", U"fünfeckige Berliner Gehwegplatte C 21b");
 
     mein_chromosom.clear();
@@ -2858,14 +2742,14 @@ if (alle_bilder) {
     mein_chromosom.add( "y"    , "b");
     mein_chromosom.add( 45.0       );
     mein_chromosom.add( "skafak", 1.36       );
-    clear_grafik( 0); clear_text(); tiefe = 12 ; turnto( -90.0); skalierung = 0.90;  breite = 1.0;
+    tiefe = 12 ; turnto( -90.0); skalierung = 0.90;  breite = 1.0; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-032-a.pnm", U"L-System Leaf C 32a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+F+F+F");
     mein_chromosom.add( "F"    , "FF+F+F+F+F+F-F");
     mein_chromosom.add( 90.0           );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto(0.0 ); skalierung = 0.5;  breite = 10.0;
+    tiefe = 4; turnto(0.0 ); skalierung = 0.5;  breite = 10.0; clear_grafik( 0); clear_text();
     zeichneC( 130.0, 9.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-023-a.pnm", U"Rings C 23a");
 
     mein_chromosom.clear();
@@ -2873,28 +2757,28 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "X+YF++YF-FX--FXFX-YF+");
     mein_chromosom.add( "Y"    , "-FX+YFYF++YF+FX--FX-Y");
     mein_chromosom.add( 60.0           );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite = 1.7;
+    tiefe = 4; turnto( 0.0); skalierung = 1.0;  breite = 1.7; clear_grafik( 0); clear_text();
     zeichneC( 100.0, 4.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-024-a.pnm", U"Hexagonal Gosper C 24a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "-F++F-");
     mein_chromosom.add( 45.0           );
-    clear_grafik( 0); clear_text(); tiefe = 10 ; turnto( 0.0); skalierung = 1.0;  breite = 2.0;
+    tiefe = 10 ; turnto( 0.0); skalierung = 1.0;  breite = 2.0; clear_grafik( 0); clear_text();
     zeichneC( 60.0, 80.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-025-a.pnm", U"Lévy curve C 25a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F--XF--F--XF");
     mein_chromosom.add( "X"    , "XF+F+XF--F--XF+F+X");
     mein_chromosom.add( 45.0           );
-    clear_grafik( 0); clear_text(); tiefe = 5 ; turnto( 0.0); skalierung = 1.0;  breite = 0.9;
+    tiefe = 5 ; turnto( 0.0); skalierung = 1.0;  breite = 0.9; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 100.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-026-a.pnm", U"Classic Sierpinski Curve C 26a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "-X--X");
     mein_chromosom.add( "X"    , "XFX--XFX");
     mein_chromosom.add( 45.0               );
-    clear_grafik( 0); clear_text(); tiefe =  6; turnto( 0.0); skalierung = 0.437;  breite = 171.0;
+    tiefe =  6; turnto( 0.0); skalierung = 0.437;  breite = 171.0; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 107.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-027-a.pnm", U"Krishna Anklets C 27a");
 
     mein_chromosom.clear();
@@ -2902,14 +2786,14 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "{F-F}{F-F}--[--X]{F-F}{F-F}--{F-F}{F-F}--");
     mein_chromosom.add( "Y"    , "f-F+X+F-fY");
     mein_chromosom.add( 60.0               );
-    clear_grafik( 0); clear_text(); tiefe = 11; turnto( 90.0); skalierung = 1.0; 
+    tiefe = 11; turnto( 90.0); skalierung = 1.0;  clear_grafik( 0); clear_text();
     zeichneC( 96.0, 2.0, tiefe, mein_chromosom, skalierung, 3.0, "/tmp/turtle/019-028-a.pnm", U"Mango Leaf C 28a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F+XF+F+XF");
     mein_chromosom.add( "X"    , "X{F-F-F}+XF+F+X{F-F-F}+X");
     mein_chromosom.add( 90.0               );
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( 45.0); skalierung = 1.0; 
+    tiefe = 4; turnto( 45.0); skalierung = 1.0;  clear_grafik( 0); clear_text();
     zeichneC( 96.0, 4.0, tiefe, mein_chromosom, skalierung, 2.0, "/tmp/turtle/019-029-a.pnm", U"Snake Kolam C 29a");
 
     mein_chromosom.add( "axiom", "(-D--D)");
@@ -2918,14 +2802,14 @@ if (alle_bilder) {
     mein_chromosom.add( "C"    , "BFA--BFA");
     mein_chromosom.add( "D"    , "CFC--CFC");
     mein_chromosom.add( 45.0               );
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( 0.0); skalierung = 1.0; 
+    tiefe = 3; turnto( 0.0); skalierung = 1.0;  clear_grafik( 0); clear_text();
     zeichneC( 96.0, 107.0, tiefe, mein_chromosom, skalierung, 3.95, "/tmp/turtle/019-030-a.pnm", U"Kolam C 30a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "FF+[+F-F-F]-[-F+F+F]");
     mein_chromosom.add( 27.5);
-    clear_grafik( 0); clear_text(); tiefe = 4; turnto( -95.0); skalierung = 0.5; breite = 30.0;
+    tiefe = 4; turnto( -95.0); skalierung = 0.5; breite = 30.0; clear_grafik( 0); clear_text();
     film_machen( false, "/data7/tmp/Bush-31a", "");
     zeichneC( 96.0, 107.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-031-a.pnm", U"Bush 31a");
     film_beenden();
@@ -2937,14 +2821,14 @@ if (alle_bilder) {
     mein_chromosom.add( "X"    , "X[-FFF][+FFF]FX");
     mein_chromosom.add( "Y"    , "YFX[+Y][-Y]");
     mein_chromosom.add( 25.7       );
-    clear_grafik( 0); clear_text(); tiefe = 6; turnto( -90.0); skalierung = 1.0;  breite = 0.8;
+    tiefe = 6; turnto( -90.0); skalierung = 1.0;  breite = 0.8; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 100, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-032a.pnm", U"Bush C 032a");
 
     mein_chromosom.clear();
     mein_chromosom.add( "axiom", "F");
     mein_chromosom.add( "F"    , "F[+FF][-FF]F[-F][+F]F");
     mein_chromosom.add( 35.0       );
-    clear_grafik( 0); clear_text(); tiefe = 5; turnto( -90.0); skalierung = 1.0;  breite = 0.44;
+    tiefe = 5; turnto( -90.0); skalierung = 1.0;  breite = 0.44; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 108.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-033a.pnm", U"Bush C 033a");
 
     mein_chromosom.clear();
@@ -2955,7 +2839,7 @@ if (alle_bilder) {
     mein_chromosom.add( "Y"    , "YZ");
     mein_chromosom.add( "Z"    , "[-FFF][+FFF]F");
     mein_chromosom.add( 20.0       );
-    clear_grafik( 0); clear_text(); tiefe = 8; turnto( -90.0); skalierung = 1.0;  breite = 4.5;
+    tiefe = 8; turnto( -90.0); skalierung = 1.0;  breite = 4.5; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 108.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-034a.pnm", U"Saupe C 034a");
 
     mein_chromosom.clear();
@@ -2964,7 +2848,7 @@ if (alle_bilder) {
     mein_chromosom.add( "skafak", 1.0);
     mein_chromosom.add( "skafak", 0.9);
     mein_chromosom.add( 50.0       );
-    clear_grafik( 0); clear_text(); tiefe = 3; turnto( -90.0); skalierung = 1.0;  breite = 5.00001;
+    tiefe = 3; turnto( -90.0); skalierung = 1.0;  breite = 5.00001; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 54.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-035a.pnm", U"Blumenkohl C 035a");
 
     mein_chromosom.clear();
@@ -2972,7 +2856,7 @@ if (alle_bilder) {
     mein_chromosom.add( "F"    , "FF");
     mein_chromosom.add( "X"    , "F[+X]F[-X]+X");
     mein_chromosom.add( 20.0       );
-    clear_grafik( 0); clear_text(); tiefe = 7; turnto( -90.0); skalierung = 1.0;  breite = 0.4;
+    tiefe = 7; turnto( -90.0); skalierung = 1.0;  breite = 0.4; clear_grafik( 0); clear_text();
     zeichneC( 96.0, 108.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-036a.pnm", U"Sticks C 036a");
 
     mein_chromosom.clear();
@@ -2999,9 +2883,9 @@ if (alle_bilder) {
     mein_chromosom.add( "u"    , "fFFF[++p]"           );
     mein_chromosom.add( "v"    , "Fv"                  );
     mein_chromosom.add( 12.0       );
-//  clear_grafik( 0); clear_text(); tiefe = 20; turnto( -90.0); skalierung = 1.0;  breite = 0.5;
+//  tiefe = 20; turnto( -90.0); skalierung = 1.0;  breite = 0.5; clear_grafik( 0); clear_text();
 //  zeichneC( 96.0, 118.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-037a.pnm", U"algae C 037a");
-    clear_grafik( 0); clear_text(); tiefe = 20; turnto( 0.0); skalierung = 1.0;  breite = 0.45;
+    tiefe = 20; turnto( 0.0); skalierung = 1.0;  breite = 0.45; clear_grafik( 0); clear_text();
     zeichneC( 0.0, 54.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-037a.pnm", U"algae C 037a");
 
     mein_chromosom.clear();
@@ -3031,7 +2915,7 @@ if (alle_bilder) {
     mein_chromosom.add( "x"    , "fFFF[+s]"               );
     mein_chromosom.add( "y"    , "Fy"                     );
     mein_chromosom.add(  12.0                             );
-    clear_grafik( 0); clear_text(); tiefe = 24; turnto( 0.0); skalierung = 1.0;  breite = 0.45;
+    tiefe = 24; turnto( 0.0); skalierung = 1.0;  breite = 0.45; clear_grafik( 0); clear_text();
     zeichneC( 0.0, 24.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-038a.pnm", U"algae C 038a");
 
     mein_chromosom.clear();
@@ -3040,10 +2924,21 @@ if (alle_bilder) {
     mein_chromosom.add( "Y"    , "-FX");
     mein_chromosom.add( "F"    , "FF-[XY]+[XY]");
     mein_chromosom.add( 22.5       );
-    clear_grafik( 0); clear_text(); tiefe = 8; turnto( 0.0); skalierung = 1.0;  breite = 0.38;
+    tiefe = 8; turnto( 0.0); skalierung = 1.0;  breite = 0.38; clear_grafik( 0); clear_text();
     zeichneC( 0.0, 54.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-039a.pnm", U"Weed C 039a");
 
 }
+    mein_chromosom.clear();
+    mein_chromosom.add( "axiom", "+WF--XF---YF--ZF");
+    mein_chromosom.add( "W"    , "YF++ZF----XF[-YF----WF]++");
+    mein_chromosom.add( "X"    , "+YF--ZF[---WF--XF]+");
+    mein_chromosom.add( "Y"    , "-WF++XF[+++YF++ZF]-");
+    mein_chromosom.add( "Z"    , "--YF++++WF[+ZF++++XF]--XF");
+    mein_chromosom.add( "F"    , "");
+    mein_chromosom.add( 36.0       );
+    tiefe = 3; turnto( 0.0); skalierung = 1.0;  breite = 10.0; clear_grafik( 0); clear_text();
+    zeichneC( 50.0, 50.0, tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-040a.pnm", U"Weitz C 040a");
+
 if (alle_bilder) {
     zeige_gen = true;
     zeige_gen = false;
@@ -3056,8 +2951,8 @@ if (alle_bilder) {
     mein_chromosom.add( "Y"    , );
     mein_chromosom.add( "F"    , );
     mein_chromosom.add(            );
-    clear_grafik( 0); clear_text(); tiefe =  ; turnto( 0.0); skalierung = 1.0;  breite = ;
-    zeichneC( , tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-040a.pnm", U" C 040a");
+    tiefe =  ; turnto( 0.0); skalierung = 1.0;  breite = ; clear_grafik( 0); clear_text();
+    zeichneC( , tiefe, mein_chromosom, skalierung, breite, "/tmp/turtle/019-041a.pnm", U" C 041a");
 
 */
 
@@ -3295,10 +3190,10 @@ int main (int argc, char *argv[]) {
   
   string pathname( cwd);
   string progname( argv[0]);
-bool alle_proben = false;
+bool alle_proben = true;
 if (alle_proben) {
-  clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, false);
 }
+  clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
 if (alle_proben) {
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
@@ -3321,7 +3216,6 @@ if (alle_proben) {
 }
 /*
   ctrue_type_font                    rufk( "ttf "      + pathname + "/" + progname, "", 1280, 960, 65535);
-  capfelmann                         rufj( "apfel2 "   + pathname + "/" + progname, "", 1920, 1080, 65535);
   cerprobe_bildpnm *rufp = new cerprobe_bildpnm( pathname + "/" + progname); 
 */
   return 0;
