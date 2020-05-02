@@ -187,6 +187,7 @@ class cframebuffer : public cbildpnm {
     char *framebufferpointer;
     int fbfiledescriptor;
     long int screensize;
+    bool debug_framebuffer;
 
   public:
     struct fb_var_screeninfo vinfo;
@@ -198,19 +199,20 @@ class cframebuffer : public cbildpnm {
     ~cframebuffer() {
       munmap(framebufferpointer, screensize);
       close(fbfiledescriptor);
-      fprintf( stderr, "FB97  The framebuffer device %X closed.\n", (unsigned int)framebufferpointer);
-      fprintf( stderr, "FB99 Destruktor fertig cframebuffer() this= %X\n", (unsigned int)this);
+      if (debug_framebuffer) fprintf( stderr, "FB97  The framebuffer device %X closed.\n", (unsigned int)framebufferpointer);
+      if (debug_framebuffer) fprintf( stderr, "FB99 Destruktor fertig cframebuffer() this= %X\n", (unsigned int)this);
     }
     cframebuffer() {
     }
     void mach_framebuffer() {
+      debug_framebuffer = false;
       // Open the file for reading and writing
       fbfiledescriptor = open("/dev/fb0", O_RDWR);
       if (fbfiledescriptor == -1) {
         perror("E020 Error: cannot open framebuffer device");
         exit(1);
       }
-      fprintf( stderr, "FB20  The framebuffer device was opened successfully.\n");
+      if (debug_framebuffer) fprintf( stderr, "FB20  The framebuffer device was opened successfully.\n");
 
       // Get fixed screen information
       if (ioctl(fbfiledescriptor, FBIOGET_FSCREENINFO, &finfo) == -1) {
@@ -218,7 +220,7 @@ class cframebuffer : public cbildpnm {
         exit(2);
       }
 
-      fprintf( stderr, "FB22  finfo.line_length=%d finfo.mmio_len=%d\n", finfo.line_length, finfo.mmio_len);
+      if (debug_framebuffer) fprintf( stderr, "FB22  finfo.line_length=%d finfo.mmio_len=%d\n", finfo.line_length, finfo.mmio_len);
 
       // Get variable screen information
       if (ioctl(fbfiledescriptor, FBIOGET_VSCREENINFO, &vinfo) == -1) {
@@ -226,15 +228,14 @@ class cframebuffer : public cbildpnm {
         exit(3);
       }
 
-      fprintf( stderr, "FB24  vinfo.xres x vinfo.yres       %dx%d, %dbpp\n", vinfo.xres,    vinfo.yres,  vinfo.bits_per_pixel);
-      fprintf( stderr, "FB24  vinfo.xoffset x vinfo.yoffset %dx%d\n",        vinfo.xoffset, vinfo.yoffset);
+      if (debug_framebuffer) fprintf( stderr, "FB24  vinfo.xres x vinfo.yres       %dx%d, %dbpp\n", vinfo.xres,    vinfo.yres,  vinfo.bits_per_pixel);
+      if (debug_framebuffer) fprintf( stderr, "FB24  vinfo.xoffset x vinfo.yoffset %dx%d\n",        vinfo.xoffset, vinfo.yoffset);
 
       // Figure out the size of the screen in bytes
       screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
 
 //    fprintf( stderr, "FB26 screensize=%ld bytes\n", screensize);
-      screensize += 0;
-      fprintf( stderr, "FB26  screensize=%d*%d*%d vinfo.bits_per_pixel/8=%ld bytes\n",
+      if (debug_framebuffer) fprintf( stderr, "FB26  screensize=%d*%d*%d vinfo.bits_per_pixel/8=%ld bytes\n",
           vinfo.xres, vinfo.yres, vinfo.bits_per_pixel/8, screensize);
 
       // Map the device to memory
@@ -243,8 +244,8 @@ class cframebuffer : public cbildpnm {
         perror("E020 Error: failed to map framebuffer device to memory");
         exit(4);
       }
-      fprintf( stderr, "FB28  The framebuffer device was mapped to memory %X.\n", (unsigned int)framebufferpointer);
-      fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %X\n\n", (unsigned int)this);
+      if (debug_framebuffer) fprintf( stderr, "FB28  The framebuffer device was mapped to memory %X.\n", (unsigned int)framebufferpointer);
+      if (debug_framebuffer) fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %X\n\n", (unsigned int)this);
 
     }
 
@@ -2100,6 +2101,185 @@ class cerprobe_bildpnm : public cbildpnm {
     }
   };
 
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+
+class czufall {
+#define DEBUG
+#undef  DEBUG
+int result;
+int inkrement;
+
+long mal( long a, long b, long mod){
+  /* a hoechstens 1 000 000 000,
+     jedenfalls darf a*2 keinen long-overflow verursachen.
+  */
+  long p=0;
+  /* ergebnis == p+a*b */
+  while (b>0) {
+    if (b%2) { 
+      /* if odd b */	  
+      p += a;
+      p %= mod;
+    }
+    a *= 2;
+    a %= mod;
+    b /= 2;
+  }
+  return p;
+}
+
+int prim( int cand) {
+	int div;
+	for (div=3; cand % div && div*div<cand; div += 2)
+		;
+	return cand % div;
+}
+
+int next_prime( int start) {
+  if (start==1) start++; 
+  if (!(start%2))
+    start++;
+  for (; !prim(start); start +=2)
+    ;
+  return start;
+}
+
+int malschlecht( int z, int f, int modul) {
+/* z < 2 ^ 24 */
+	unsigned char *f1;
+	int p = 0, zeiger;
+	f1 = (unsigned char*)&f;
+	p = (z*(*f1)%modul);
+	for (zeiger = 0; zeiger < 3; zeiger ++) {
+		f1 += 1;
+		p = (p<<8) % modul;
+		p += (z*(*f1)%modul);
+		p %= modul;
+#ifdef DEBUG
+		fprintf( stderr, "f1=%d p=%d\n", *f1, p);
+#endif //  DEBUG
+	}
+	return p;
+}
+
+int mpotenz( int x, int n, int modul) {
+	/*
+** Donald Knuth, The Art of Computer Programming, Vol. 2,
+** Seminumerical Algorithms, Page 442
+*/
+	int N,Y,Z;
+	N=n;
+	Y=1;
+	Z=x;
+	while (N) {
+		/*
+**      x hoch n == Y * Z hoch N
+*/
+		if (N%2)
+			Y = mal( Y, Z, modul);
+		N /= 2;
+		Z = mal( Z, Z, modul);
+	}
+	return Y;
+}
+
+int next() {
+  if ( inkrement == 2 ) inkrement = 4;
+  else                  inkrement = 2;
+
+  switch (result) {
+    case 0:  result = 2; break;
+    case 2:  result = 3; break;
+    case 3:  result = 5; break;
+    default: result += inkrement; break;
+  }
+  return result;
+}
+
+int faktor( int *N) {
+	/*
+** Donald Knuth, The Art of Computer Programming, Vol. 2,
+** Seminumerical Algorithms, Page 364
+*/
+	int n;
+	int q, r;
+	int dk=next();
+	n = *N;
+	while (n!=1) {
+		do {
+			q=n/dk;
+			r=n%dk;
+			if (!r)
+				break;
+			dk=next();
+		} while (q>dk);
+		if (r) {
+			*N=1;
+			return n;
+		}
+		while (!(n%dk)) n /= dk;
+		*N=n;
+		return dk;
+	}
+	return n;
+	/*
+**      n == N / p1 * p2 *...* pt und
+**      n hat keine Primfaktoren kleiner als dk
+*/
+}
+
+int primitiv( int a, int p) {
+	int q, p_minus_1, pot;
+	for (;;a++){
+#ifdef DEBUG
+	  fprintf( stderr, "a=%d ", a);
+#endif //  DEBUG
+		if (!(a%p))
+			continue;
+		//next = anfang;
+		result = 0;
+		p_minus_1 = p - 1;
+		while (p_minus_1 > 1) {
+#ifdef DEBUG
+			fprintf( stderr, "p_minus_1=%d\n", p_minus_1);
+#endif //  DEBUG
+			q = faktor( &p_minus_1);
+#ifdef DEBUG
+			fprintf( stderr, "q=%d\n", q);
+#endif //  DEBUG
+			pot = mpotenz( a, (p-1)/q, p);
+#ifdef DEBUG
+			fprintf( stderr, "q=%d (p-1)/q=%d pot=%d\n", q, (p-1)/q, pot);
+#endif //  DEBUG
+			if ( pot == 1) break;
+		}
+		if ( pot != 1) return  a;
+	}
+	fprintf( stderr, "keine primitive > a=%d modulo p=%d\n", a, p);
+}
+
+public:
+int eine_primitive( int *zahl) {
+/*
+** Liefert zwei Zahlen als Grundlage
+** fuer einen Pseudozufallszahlengenerator,
+** der pseudozufaellig alle Werte
+** in einem ganzzahligen Intervall annimmt.
+*/
+	int primitive_zahl;
+	*zahl = next_prime( *zahl);
+	primitive_zahl = primitiv( 1, *zahl);
+	return primitive_zahl;
+}
+
+};
+
 class capfelmann : public cturtle {
   public:
     capfelmann( string progname, string dateiname, int hor, int ver, int deep) : cturtle ( hor, ver, deep, progname) {
@@ -2123,7 +2303,14 @@ class capfelmann : public cturtle {
           (DOUBLEPAIR){re_max, imaginaer.y},
         tief
         );
-      druck_pnm( "/tmp/turtle/turtle-018-capfelmann-streifen-02.pnm");
+      druck_pnm( "/tmp/turtle/turtle-017-capfelmann-streifen-02.pnm");
+      huepf(
+          punkte,
+          (DOUBLEPAIR){re_min, imaginaer.x},
+          (DOUBLEPAIR){re_max, imaginaer.y},
+          tief
+          );
+      druck_pnm( "/tmp/turtle/turtle-018-capfelmann-huepf.pnm");
     }
   DOUBLEPAIR mandelbrotparameter( INTPAIR punkte, double re_min, double re_max) {
 /*  Nur für framebuffer relevant
@@ -2191,8 +2378,64 @@ class capfelmann : public cturtle {
       for (yy = 0; yy < punkte.y; yy++) {
         int farbe = mandelfolge( min.x+xx*stepx, min.y+yy*stepy, rechentiefe);
         plot3( xx, yy, toRGB( farbe));
-        plotf( xx, yy,        farbe );
+//      plotf( xx, yy,        farbe );
       }
+  }
+
+  int huepf( INTPAIR punkte,
+             DOUBLEPAIR links_unten, DOUBLEPAIR rechts_oben,
+             int rechentiefe) {
+    int basis;
+    int prim, x_mal_y, zaehler;
+    int xx, yy, farbe, ort = 1;
+    double  stepx,stepy;
+    clear_grafik( 0);
+  
+    short minx, maxx, miny, maxy;
+    int minort, maxort;
+    minx=32767, maxx=-32768, miny=32767, maxy=-32768;
+    minort=2000000000, maxort=-2000000000;
+  
+    stepx = (rechts_oben.x-links_unten.x)/punkte.x;
+    stepy = (rechts_oben.y-links_unten.y)/punkte.y;
+    /*
+    ** Die Periode des Dezimalbruchs 1/798713 ist 798712 Ziffern lang.
+    ** basis = 10;
+    ** x_mal_y = 798713;
+    */
+    prim = x_mal_y = punkte.x * punkte.y;
+    fprintf( stderr, "M030 x_mal_y=%d ", x_mal_y);
+    czufall ein_zufall;
+    basis = ein_zufall.eine_primitive( &prim);
+    fprintf( stderr, "M032 basis=%d prim=%d\n", basis, prim);
+    for (zaehler=1; zaehler < prim; zaehler++) {
+      //while ((ort = basis * ort % prim) > x_mal_y);
+      ort = basis * ort % prim;
+      if (ort <= x_mal_y) {
+        //fprintf( stderr, "z=%d,o=%d ", zaehler, ort);
+        xx = (ort-1) % punkte.x; 
+        yy = (ort-1) / punkte.x;
+        if (1) {
+          if (xx<minx) minx=xx;
+          if (yy<miny) miny=yy;
+          if (xx>maxx) maxx=xx;
+          if (yy>maxy) maxy=yy;
+          if (ort<minort) minort=ort;
+          if (ort>maxort) maxort=ort;
+        }
+#ifdef DEBUG
+        fprintf( stderr,"M034 x=%5d y=%5d\n", xx, yy);
+#endif //  DEBUG
+        if ( (farbe = mandelfolge( links_unten.x+xx*stepx, links_unten.y+yy*stepy, rechentiefe)) >=0) {
+          plotf( xx, yy, farbe);
+          plot3( xx, yy, toRGB( farbe));
+        }
+      }
+    }
+    if (true) {
+      fprintf( stderr, "M036 minort=%d, maxort=%d, minx=%d maxx=%d miny=%d maxy=%d\n",
+               minort, maxort, minx, maxx, miny, maxy);
+    }
   }
 
 };
