@@ -1,6 +1,11 @@
 /* Hannos Bildschirme 20.5'' mal 11.5'',
  * ca 93 dpi in beide Richtungen in beide Richtungen
 */
+#include <linux/fb.h>   // framebuffer
+#include <sys/mman.h>   // framebuffer
+#include <sys/ioctl.h>  // framebuffer
+#include <fcntl.h>      // framebuffer open
+
 #include <string.h>    // freetype
 #include <ft2build.h>  // freetype
 #include FT_FREETYPE_H
@@ -55,11 +60,7 @@ class pixeltypen {
 // clear, plot3 und druck_pnm arbeiten auf der Zeichenfläche (TBILD)tbild
 // (TBILD)tbild ist ein einziger string (von Bytes)
 class cbildpnm : public pixeltypen {
-  protected:
-  int hor, ver, deep;
-  TBILD tbild;
   public:
-  string progname;
   cbildpnm( int hor, int ver, int deep, string progname) {
     this->progname = progname;
     this->hor  = hor;
@@ -69,15 +70,9 @@ class cbildpnm : public pixeltypen {
     int bpp;
     bpp = sizeof(RGB);
     switch (deep) {
-      case 65535:
-        bpp = sizeof(RGB);
-        break;
-      case   255:
-        bpp = 3;
-        break;
-      default:
-        bpp = sizeof(RGB);
-        break;
+      case 65535: bpp = sizeof(RGB); break;
+      case   255: bpp = 3;           break;
+      default   : bpp = sizeof(RGB); break;
     }
 
     string t3ld( hor*ver*bpp, '\0');
@@ -85,6 +80,11 @@ class cbildpnm : public pixeltypen {
   }
   cbildpnm() {}
   ~cbildpnm() {}
+  protected:
+  int hor, ver, deep;
+  TBILD tbild;
+  public:
+  string progname;
   void clear_grafik( char farbe) {
     std::fill_n(tbild.memo.begin(), tbild.memo.length(), farbe);
     // int bpp = sizeof(RGB);
@@ -180,7 +180,136 @@ class cbildpnm : public pixeltypen {
   }
 };
 
-class ctrue_type_font : public cbildpnm {
+class cframebuffer : public cbildpnm {
+  public:
+  cframebuffer( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {}
+  private:
+    char *framebufferpointer;
+    int fbfiledescriptor;
+    long int screensize;
+
+  public:
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+
+    struct fb_var_screeninfo get_vinfo() { return vinfo;}
+    struct fb_fix_screeninfo get_finfo() { return finfo;}
+
+    ~cframebuffer() {
+      munmap(framebufferpointer, screensize);
+      close(fbfiledescriptor);
+      fprintf( stderr, "FB97  The framebuffer device %X closed.\n", (unsigned int)framebufferpointer);
+      fprintf( stderr, "FB99 Destruktor fertig cframebuffer() this= %X\n", (unsigned int)this);
+    }
+    cframebuffer() {
+    }
+    void mach_framebuffer() {
+      // Open the file for reading and writing
+      fbfiledescriptor = open("/dev/fb0", O_RDWR);
+      if (fbfiledescriptor == -1) {
+        perror("E020 Error: cannot open framebuffer device");
+        exit(1);
+      }
+      fprintf( stderr, "FB20  The framebuffer device was opened successfully.\n");
+
+      // Get fixed screen information
+      if (ioctl(fbfiledescriptor, FBIOGET_FSCREENINFO, &finfo) == -1) {
+        perror("E020 Error reading fixed information");
+        exit(2);
+      }
+
+      fprintf( stderr, "FB22  finfo.line_length=%d finfo.mmio_len=%d\n", finfo.line_length, finfo.mmio_len);
+
+      // Get variable screen information
+      if (ioctl(fbfiledescriptor, FBIOGET_VSCREENINFO, &vinfo) == -1) {
+        perror("E020 Error reading variable information");
+        exit(3);
+      }
+
+      fprintf( stderr, "FB24  vinfo.xres x vinfo.yres       %dx%d, %dbpp\n", vinfo.xres,    vinfo.yres,  vinfo.bits_per_pixel);
+      fprintf( stderr, "FB24  vinfo.xoffset x vinfo.yoffset %dx%d\n",        vinfo.xoffset, vinfo.yoffset);
+
+      // Figure out the size of the screen in bytes
+      screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+
+//    fprintf( stderr, "FB26 screensize=%ld bytes\n", screensize);
+      screensize += 0;
+      fprintf( stderr, "FB26  screensize=%d*%d*%d vinfo.bits_per_pixel/8=%ld bytes\n",
+          vinfo.xres, vinfo.yres, vinfo.bits_per_pixel/8, screensize);
+
+      // Map the device to memory
+      framebufferpointer = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fbfiledescriptor, 0);
+      if (framebufferpointer == (void *) -1) {
+        perror("E020 Error: failed to map framebuffer device to memory");
+        exit(4);
+      }
+      fprintf( stderr, "FB28  The framebuffer device was mapped to memory %X.\n", (unsigned int)framebufferpointer);
+      fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %X\n\n", (unsigned int)this);
+
+    }
+
+  void plotf(int x, int y, int farbe) {
+    long int location = 0;
+
+    // Figure out where in memory to put the pixel
+
+    location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
+               (y+vinfo.yoffset) * finfo.line_length;
+    int red, green, blue;
+    if (vinfo.bits_per_pixel == 32) {
+      switch (farbe/10%8) {
+        case  0: red=  0; green=  0; blue=  0; break;
+        case  1: red=  0; green=  0; blue=254; break;
+        case  2: red=  0; green=254; blue=  0; break;
+        case  3: red=  0; green=254; blue=254; break;
+        case  4: red=254; green=  0; blue=  0; break;
+        case  5: red=254; green=  0; blue=254; break;
+        case  6: red=254; green=254; blue=  0; break;
+        case  7: red=254; green=254; blue=254; break;
+        default: red=128; green=128; blue=128; break;
+      }
+      // Pointer-Arithmetik ist hier die gewöhnliche Arithmetik, weil framebufferpointer auf char zeigt.
+      *(framebufferpointer + location)     = blue;
+      *(framebufferpointer + location + 1) = green;
+      *(framebufferpointer + location + 2) = red;
+      *(framebufferpointer + location + 3) = 0;      // No transparency
+      //location += 4;
+//    fprintf( stderr, "FB40 x=%4d y=%4d farbe=%06x\n", x, y, farbe);
+    } else  { //assume 16bpp
+      fprintf( stderr, "FB88 vinfo.bits_per_pixel != 32 sondern %d\n", vinfo.bits_per_pixel);
+      return;
+      int blue  = 10;
+      int green = (x-100)/6;        // A little green
+      int red   = 31-(y-100)/16;    // A lot of red
+      unsigned short int tt = red<<11 | green << 5 | blue;
+      *((unsigned short int*)(framebufferpointer + location)) = tt;
+    }
+  }
+};
+
+class ctrue_type_font : public cframebuffer {
+  public:
+  ctrue_type_font( int hor, int ver, int deep, string progname) : cframebuffer( hor, ver, deep, progname) {
+    this->textfarbe = weisz;
+    this->textfenster_origin_x = 129; this->textfenster_origin_y = 129;
+    this->textfenster_origin_x =   0; this->textfenster_origin_y =   0;
+    this->textfenster_height = ver; this->textfenster_width = hor; // this->deep = deep; this->progname = progname;
+    this->textfenster_speicher = erzeuge_textfenster( this->textfenster_width, this->textfenster_height);
+    set_text_pt( 50); set_text_dpi( 100);
+
+    clear_text();
+if (false) {
+    char text[] = "\101\344ABCdefäölüßghixyzLOKj";
+    u32string text32 = chararray_to_u32string( text);
+    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
+
+    u32string ein_32wort = U"AäöüßÄÖłżźśńęąEфывапролджэ"; // ruft plot3
+    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
+    druck_pnm( "/tmp/turtle/turtle-001-ctrue_type_font-02.pnm");
+}
+  }
+  ctrue_type_font() {}
+
   private:
   int textfenster_origin_x, textfenster_origin_y;
   int textfenster_height, textfenster_width;
@@ -210,27 +339,6 @@ class ctrue_type_font : public cbildpnm {
   void set_text_pt( int points) { this->points = points; }
   void set_text_dpi( int dpi) { this->dpi = dpi; }
   
-  ctrue_type_font() {}
-  ctrue_type_font( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {
-    this->textfarbe = weisz;
-    this->textfenster_origin_x = 129; this->textfenster_origin_y = 129;
-    this->textfenster_origin_x =   0; this->textfenster_origin_y =   0;
-    this->textfenster_height = ver; this->textfenster_width = hor; // this->deep = deep; this->progname = progname;
-    this->textfenster_speicher = erzeuge_textfenster( this->textfenster_width, this->textfenster_height);
-    set_text_pt( 50); set_text_dpi( 100);
-
-    clear_text();
-if (false) {
-    char text[] = "\101\344ABCdefäölüßghixyzLOKj";
-    u32string text32 = chararray_to_u32string( text);
-    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
-
-    u32string ein_32wort = U"AäöüßÄÖłżźśńęąEфывапролджэ"; // ruft plot3
-    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
-    druck_pnm( "/tmp/turtle/turtle-001-ctrue_type_font-02.pnm");
-}
-  }
-
   u32string chararray_to_u32string( char *ein_text) {
     int lang = strlen( ein_text);
     u32string ein32wort( lang, 98);
@@ -984,9 +1092,6 @@ for ( n = 0; n < num_glyphs; n++ ) {
 // definiere breseline
 
 class cbrese : public ctrue_type_font {
-  bool film_mach_einzelne_bilder;
-  int film_dateinummer;
-  string film_verzeichnisname, film_dateiname_praefix, film_suffix;
   public:
   cbrese( int hor, int ver, int deep, string progname) : ctrue_type_font ( hor, ver, deep, progname) {
     this->film_mach_einzelne_bilder = false;
@@ -996,6 +1101,12 @@ class cbrese : public ctrue_type_font {
   }
   cbrese() {}
 
+  private:
+  bool film_mach_einzelne_bilder;
+  int film_dateinummer;
+  string film_verzeichnisname, film_dateiname_praefix, film_suffix;
+
+  public:
   string film_pfadname_ganz() {
     return
         this->film_verzeichnisname
@@ -1021,7 +1132,6 @@ class cbrese : public ctrue_type_font {
 // convert -delay 100 /tmp/turtle/turtle-003-cerprobe_turtle-10000??.pnm -loop 0 /tmp/turtle/turtle-003-cerprobe_turtle-1000999.gif
   void film_beenden() {
     cerr << "B014 "
-      << endl
       << "convert -delay 100 "
       << this->film_dateiname_praefix << "1??????.pnm"
       << " -loop 0 "
@@ -1115,9 +1225,11 @@ class cabbild : public cbrese {
   double welt_min_x, welt_min_y, welt_max_x, welt_max_y;
   double abb_limit_min_x, abb_limit_min_y, abb_limit_max_x, abb_limit_max_y;
   double maszstab_x, maszstab_y;
+  bool debug_skala;
 
   public:
   cabbild( int hor, int ver, int deep, string progname) : cbrese( hor, ver, deep, progname) {
+    debug_skala = false;
     welt_min_x= -4000.0,
     welt_max_x=  4000.0,
     welt_min_y= -4000.0,
@@ -1212,75 +1324,32 @@ class cabbild : public cbrese {
   void koperta_welt( bool mit_raster = false) {
     if (mit_raster) koperta_raster( true);
 
-  typedef  int (cabbild::*fatyp) (double);
-  /* entweder
-  */
-  fatyp                   fxptr;
-  fatyp                   fyptr;
-  /* oder
-    int (cabbild::*fxptr) (double) = &cabbild::abbildx;
-    int (cabbild::*fyptr) (double) = &cabbild::abbildy;
-  */
-  /* ende oder
-  */
-
-  typedef  int (*func_typ)(double); 
-           int (*ffabbild)(double); 
-  func_typ      ffabbile;
-                ffabbile = ffabbild;
-//typedef  int (cabbild::*fatyp) (double);
-//         int (cabbild::*faptr) (double);           // falsch, weil schon deklariert
-//fatyp                   faptr;                     // falsch, weil schon deklariert
-//fatyp                   fxptr = &cabbild::abbildx; // falsch, weil schon deklariert
-//int (         cabbild::*fxptr) (double) = &cabbild::abbildx;// falsch, weil schon deklariert
-  
-  typedef  int (         *fbtyp) (double);
-           int (         *fbptr) (double);
-
-    fatyp   faptr;
-//  faptr = fbptr;  // falsch, verschiedene Typen
-    faptr = fxptr;
-    faptr = fyptr;
-   _fyptr = fyptr;
-    int probe;
-    this->cabbild::abbildx( 1.0);
-    &cabbild::abbildy;
-    fyptr;
-    cerr << "S040 fyptr " << fyptr << " &cabbild::abbildy " << &cabbild::abbildy << endl;
-//  (&cabbild::abbildx)( 1.0)
-//  (*this.*_fyptr)( 1.0);
-//  int result4 = (*this.*fyptr)( 1.0);
-/*
-*/
     sskala skala_y = leiste_welt( welt_min_y, welt_max_y);
-    cerr << endl << "S010y " << " welt_min_y= " << welt_min_y << " welt_max_y= " << welt_max_y
+    if (debug_skala) cerr << endl << "S010y " << " welt_min_y= " << welt_min_y << " welt_max_y= " << welt_max_y
                              << " abb_min_y= " << abbildy( welt_min_y) << " abb_max_y= " << abbildy( welt_max_y) << endl;
 
-    skala_y.zeichne_die_marken_ins_bild( fyptr, this, 'y');
-    skala_y.zeichne_die_marken_ins_bild( probe);
+    skala_y.zeichne_die_marken_ins_bild( this, 'y');
 
-    cerr << "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy koperta_welt" << endl;
+    if (debug_skala) cerr << "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy koperta_welt" << endl;
 
     sskala skala_x = leiste_welt( welt_min_x, welt_max_x);
-    cerr << endl << "S010x " << " welt_min_x= " << welt_min_x << " welt_max_x= " << welt_max_x
+    if (debug_skala) cerr << endl << "S010x " << " welt_min_x= " << welt_min_x << " welt_max_x= " << welt_max_x
                              << " abb_min_x= " << abbildx( welt_min_x) << " abb_max_x= " << abbildx( welt_max_x) << endl;
-    skala_x.zeichne_die_marken_ins_bild( fxptr, this, 'x');
-    skala_x.zeichne_die_marken_ins_bild( probe);
+    skala_x.zeichne_die_marken_ins_bild( this, 'x');
 
-    cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx koperta_welt" << endl;
+    if (debug_skala) cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx koperta_welt" << endl;
   }
 
   struct sskala { 
     double pov_pos; vector<double> marke;
-    void zeichne_die_marken_ins_bild( int funktion) {
-    }
-    void zeichne_die_marken_ins_bild( fatyp funktion, cabbild *diss, char x_oder_y) {
+    void zeichne_die_marken_ins_bild( cabbild *diss, char x_oder_y) {
 //    int result4 = (*this.*funktion)( 1.0);
     // Skala
     diss->set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
     char labelc[] =  "0123456789012345678901234567890123456789"; int label_size = sizeof(labelc);
     double schritt;
 
+    if (diss->debug_skala) {
       cerr << "S050" << x_oder_y << " ";
       for (int ii=0; ii<marke.size(); ii++) {
         cerr << setw(4) << setfill(' ') << marke[ii] << " ";
@@ -1294,9 +1363,10 @@ class cabbild : public cbrese {
         cerr << setw(4) << setfill(' ') << marke[ii] * pov_pos << " ";
       }
       cerr << endl;
-
+    }
       switch (x_oder_y) {
         case 'x':
+    if (diss->debug_skala) {
             cerr << "S052" << x_oder_y << " ";
             for (int ii=0; ii<marke.size(); ii++) {
               int xx = diss->abbildx( marke[ii] * pov_pos);
@@ -1304,6 +1374,7 @@ class cabbild : public cbrese {
             }
             cerr << endl;
             cerr << "S022" << x_oder_y << " ";
+    }
             for (int ii=0; ii<marke.size(); ii++) {
               double mx = marke[ii] * pov_pos;
               int xx = diss->abbildx( mx);
@@ -1313,11 +1384,12 @@ class cabbild : public cbrese {
 //            cerr << label.c_str() << " ";
               diss->set_text_pt( 20);
               diss->main32( label, xx, diss->ver-diss->ver/40.0, 10.0);
-              cerr << labelc << " ";
+              if (diss->debug_skala) cerr << labelc << " ";
             }
-            cerr << endl;
+            if (diss->debug_skala) cerr << endl;
           break;
         case 'y':
+    if (diss->debug_skala) {
             cerr << "S052" << x_oder_y << " ";
             for (int ii=0; ii<marke.size(); ii++) {
               int yy = diss->abbildy( marke[ii] * pov_pos);
@@ -1325,6 +1397,7 @@ class cabbild : public cbrese {
             }
             cerr << endl;
             cerr << "S022" << x_oder_y << " ";
+    }
             for (int ii=0; ii<marke.size(); ii++) {
               int yy = diss->abbildy( marke[ii] * pov_pos);
 //            snprintf( labelc, label_size, "%4.0f %d", marke[ii] * pov_pos, yy);
@@ -1333,9 +1406,9 @@ class cabbild : public cbrese {
 //            cerr << label.c_str() << " ";
               diss->set_text_pt( 20);
               diss->main32( label, diss->hor/20.0, yy, 10.0);
-              cerr << labelc << " ";
+              if (diss->debug_skala) cerr << labelc << " ";
             }
-            cerr << endl;
+            if (diss->debug_skala) cerr << endl;
           break;
       }
 
@@ -1343,7 +1416,7 @@ class cabbild : public cbrese {
   };
 
     sskala leiste_welt( double orig_min, double orig_max) {
-      cerr << endl << "S010 " << " orig_min= " << orig_min << " orig_max= " << orig_max << endl;
+      if (debug_skala) cerr << endl << "S010 " << " orig_min= " << orig_min << " orig_max= " << orig_max << endl;
       double rund_min, rund_max, rund_delta, orig_delta, orig_step;
       double mod_min, mod_max, mod_delta, mod_step;
       orig_delta = orig_max - orig_min;
@@ -1407,11 +1480,10 @@ class cabbild : public cbrese {
 
 class ctitel : public cabbild {
   public:
-  ctitel( int hor, int ver, int deep, string progname) : cabbild( hor, ver, deep, progname) {
-  }
+  ctitel( int hor, int ver, int deep, string progname) : cabbild( hor, ver, deep, progname) {}
   ctitel() {}
   void drucke_einen_titel( u32string worte) {
-    cerr << "T010 " << worte.c_str() << endl;
+      cerr << "T010 " << worte.c_str() << " " << (worte.size()>0?worte.c_str()[0]:'x') << endl;
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
     // u32string worte = U"Titel AäöüßÄÖłżźśńęąEфывапролджэ";
     main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", worte, hor/5, +60, 0);
@@ -2032,6 +2104,7 @@ class capfelmann : public cturtle {
   public:
     capfelmann( string progname, string dateiname, int hor, int ver, int deep) : cturtle ( hor, ver, deep, progname) {
       std::cerr << "Z060  progname= " << progname << std::endl;
+    mach_framebuffer();
       // Zeichenfläche in int Pixelkoordinaten
       INTPAIR punkte = (INTPAIR){ hor, ver};
       int tief = 160;
@@ -2118,6 +2191,7 @@ class capfelmann : public cturtle {
       for (yy = 0; yy < punkte.y; yy++) {
         int farbe = mandelfolge( min.x+xx*stepx, min.y+yy*stepy, rechentiefe);
         plot3( xx, yy, toRGB( farbe));
+        plotf( xx, yy,        farbe );
       }
   }
 
@@ -2886,7 +2960,7 @@ void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, do
 //  double length_scale_factor =1.41421356;
     zustand zuszus;
     int num_chars = gen.size();
-    if (gerundet) cerr << "K012 zeichne li_re= " << li_re << " gen= " << gen << endl;
+    if (gerundet) cerr << "K012 zeichne gerundet li_re= " << li_re << " gen= " << gen << endl;
     for ( int n = 0; n < num_chars; n++ ) {
       switch (gen[n]) {
         case 'f': retter = penstyle(); penstyle( stiftart::AUS);
@@ -2910,7 +2984,7 @@ void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, do
                   break;
         case ']': if ( !state.empty()) {
                     zustand letzter = state.back();
-                    letzter.zeig_zustand();
+                    bool debug_zustand=false; if (debug_zustand) letzter.zeig_zustand();
                     turnto( letzter.winkel);
                     retter = penstyle(); penstyle( stiftart::AUS); moveto( letzter.ort); penstyle( retter);
                     state.pop_back();
@@ -2980,8 +3054,8 @@ int main (int argc, char *argv[]) {
   string progname( argv[0]);
 bool alle_proben = false;
 if (alle_proben) {
+  clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, false);
 }
-  clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, true);
 if (alle_proben) {
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
@@ -2999,8 +3073,8 @@ if (alle_proben) {
   csierpinski_turtle                 rufg( "sierp "    + pathname + "/" + progname, "", 1920, 1080, 65535);
   csierpinski_ohne_turtle            rufh( "sierp2 "   + pathname + "/" + progname, "", 1600,  900, 65535);
 }
-if (alle_proben) {
   capfelmann                         rufi( "apfel "    + pathname + "/" + progname, "", 1920, 1080, 65535);
+if (alle_proben) {
 }
 /*
   ctrue_type_font                    rufk( "ttf "      + pathname + "/" + progname, "", 1280, 960, 65535);
