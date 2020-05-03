@@ -165,7 +165,6 @@ class cbildpnm : public pixeltypen {
     druck_datei.open ( filename.c_str());
     if (druck_datei.is_open()) {
       /* ok, proceed with output */
-      cerr << "D020 geöffnet " << filename << endl;
       druck_datei
         << "P6"                   << endl
         << "# " << this->progname << endl
@@ -174,6 +173,7 @@ class cbildpnm : public pixeltypen {
         << tbild.memo
         ;
       druck_datei.close();
+      cerr << "D020 " << filename << " geschrieben." << endl;
     } else {
       cerr << "D030 nicht geöffnet " << filename << endl;
     }
@@ -197,15 +197,16 @@ class cframebuffer : public cbildpnm {
     struct fb_fix_screeninfo get_finfo() { return finfo;}
 
     ~cframebuffer() {
+      if (debug_framebuffer) fprintf( stderr, "FB97  The framebuffer device %p closing.\n", (void *)framebufferpointer);
+      if (framebufferpointer == 0) return;
       munmap(framebufferpointer, screensize);
       close(fbfiledescriptor);
-      if (debug_framebuffer) fprintf( stderr, "FB97  The framebuffer device %X closed.\n", (unsigned int)framebufferpointer);
-      if (debug_framebuffer) fprintf( stderr, "FB99 Destruktor fertig cframebuffer() this= %X\n", (unsigned int)this);
+      if (debug_framebuffer) fprintf( stderr, "FB99 Destruktor fertig cframebuffer() this= %p\n", (void *)this);
     }
     cframebuffer() {
     }
-    void mach_framebuffer() {
-      debug_framebuffer = false;
+    INTPAIR mach_framebuffer() {
+      debug_framebuffer = true;
       // Open the file for reading and writing
       fbfiledescriptor = open("/dev/fb0", O_RDWR);
       if (fbfiledescriptor == -1) {
@@ -244,8 +245,12 @@ class cframebuffer : public cbildpnm {
         perror("E020 Error: failed to map framebuffer device to memory");
         exit(4);
       }
-      if (debug_framebuffer) fprintf( stderr, "FB28  The framebuffer device was mapped to memory %X.\n", (unsigned int)framebufferpointer);
-      if (debug_framebuffer) fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %X\n\n", (unsigned int)this);
+      if (debug_framebuffer) fprintf( stderr, "FB28  The framebuffer device was mapped to memory %p.\n", (void *)framebufferpointer);
+      if (debug_framebuffer) fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %p\n\n", this);
+      INTPAIR HORxVER;
+      HORxVER.x = vinfo.xres;
+      HORxVER.y = vinfo.yres;
+      return HORxVER;
 
     }
 
@@ -537,7 +542,7 @@ if (false) {
     }
     error = FT_New_Face( library, textfenster_filename, 0, &face );   /* ... create face object ... */
     if (error!=0) {
-      fprintf( stderr, "error=%d FT_New_Face\n", error);
+      fprintf( stderr, "F020 error=%d FT_New_Face %s\n", error, textfenster_filename);
       return errno;
     }
     /* use 50pt at 100dpi */
@@ -750,7 +755,7 @@ for ( n = 0; n < num_glyphs; n++ ) {
     }
     error = FT_New_Face( library, textfenster_filename, 0, &face );   /* create face object */
     if (error!=0) {
-      fprintf( stderr, "error=%d FT_New_Face\n", error);
+      fprintf( stderr, "F020 error=%d FT_New_Face %s\n", error, textfenster_filename);
       return errno;
     }
     /* use 50pt at 100dpi */
@@ -850,7 +855,7 @@ for ( n = 0; n < num_glyphs; n++ ) {
     }
     error = FT_New_Face( library, textfenster_filename, 0, &face );   /* create face object */
     if (error!=0) {
-      fprintf( stderr, "error=%d FT_New_Face\n", error);
+      fprintf( stderr, "F020 error=%d FT_New_Face %s\n", error, textfenster_filename);
       return errno;
     }
     /* use 50pt at 100dpi */
@@ -1367,8 +1372,10 @@ class ctitel : public cabbild {
   public:
   ctitel( int hor, int ver, int deep, string progname) : cabbild( hor, ver, deep, progname) {}
   ctitel() {}
+  bool debug_ctitel;
   void drucke_einen_titel( u32string worte) {
-      cerr << "T010 " << worte.c_str() << " " << (worte.size()>0?worte.c_str()[0]:'x') << endl;
+    debug_ctitel = false;
+    if (debug_ctitel) cerr << "T010 " << worte.c_str() << " " << (worte.size()>0?worte.c_str()[0]:'x') << endl;
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
     // u32string worte = U"Titel AäöüßÄÖłżźśńęąEфывапролджэ";
     main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", worte, hor/5, +60, 0);
@@ -2168,47 +2175,47 @@ class capfelmann : public cturtle {
   public:
     capfelmann( string progname, string dateiname, int hor, int ver, int deep) : cturtle ( hor, ver, deep, progname) {
       std::cerr << "Z060  progname= " << progname << std::endl;
-    mach_framebuffer();
+    INTPAIR HORxVER = mach_framebuffer();
       // Zeichenfläche in int Pixelkoordinaten
-      INTPAIR punkte = (INTPAIR){ hor, ver};
       int tief = 160;
       streifen(
-          punkte,
+          HORxVER,
           (DOUBLEPAIR){-1.800, -0.016875},
           (DOUBLEPAIR){-1.740, 0.016875},
           tief
           );
       druck_pnm( "/tmp/turtle/turtle-017-capfelmann-streifen-01.pnm");
       double re_min=-2.0, re_max = 0.5;
-      DOUBLEPAIR imaginaer = mandelbrotparameter( punkte, re_min, re_max);
+      DOUBLEPAIR imaginaer = mandelbrotparameter( HORxVER, re_min, re_max);
       streifen(
-          punkte,
+          HORxVER,
           (DOUBLEPAIR){re_min, imaginaer.x},
           (DOUBLEPAIR){re_max, imaginaer.y},
         tief
         );
       druck_pnm( "/tmp/turtle/turtle-017-capfelmann-streifen-02.pnm");
       huepf(
-          punkte,
+          HORxVER,
           (DOUBLEPAIR){re_min, imaginaer.x},
           (DOUBLEPAIR){re_max, imaginaer.y},
           tief
           );
       druck_pnm( "/tmp/turtle/turtle-018-capfelmann-huepf.pnm");
     }
-  DOUBLEPAIR mandelbrotparameter( INTPAIR punkte, double re_min, double re_max) {
+    
+  DOUBLEPAIR mandelbrotparameter( INTPAIR HORxVER, double re_min, double re_max) {
 /*  Nur für framebuffer relevant
     struct fb_var_screeninfo vvinfo = instanz_cplotter0->get_vinfo();
-    if (punkte.y  > vvinfo.yres) punkte.y  = vvinfo.yres;
-    if (punkte.x > vvinfo.xres) punkte.x = vvinfo.xres;
+    if (HORxVER.y  > vvinfo.yres) HORxVER.y  = vvinfo.yres;
+    if (HORxVER.x > vvinfo.xres) HORxVER.x = vvinfo.xres;
     fprintf( stderr, "M010 apfelmann vinfo.xres=%d vinfo.yres=%d\n", vvinfo.xres, vvinfo.yres);
 */
-    //aspect ratio nach Bildschrmabmessung punkte.x punkte.y
-    double delta_im = (re_max-re_min) * punkte.y / punkte.x;
+    //aspect ratio nach Bildschrmabmessung HORxVER.x HORxVER.y
+    double delta_im = (re_max-re_min) * HORxVER.y / HORxVER.x;
     double im_max = delta_im/2.0;
     double im_min = im_max-delta_im;
     im_max+=0.0, im_min+=0.0 ;
-    fprintf( stderr, "M014 apfelmann punkte.x=%d punkte.y=%d %4.2f %4.2f\n", punkte.x, punkte.y, im_min, im_max);
+    fprintf( stderr, "M014 apfelmann HORxVER.x=%d HORxVER.y=%d %4.2f %4.2f\n", HORxVER.x, HORxVER.y, im_min, im_max);
     return (DOUBLEPAIR){im_min, im_max};
   }
 
@@ -3218,5 +3225,6 @@ if (alle_proben) {
   ctrue_type_font                    rufk( "ttf "      + pathname + "/" + progname, "", 1280, 960, 65535);
   cerprobe_bildpnm *rufp = new cerprobe_bildpnm( pathname + "/" + progname); 
 */
+  cerr << "M999 Fertig" << endl << endl;
   return 0;
 }

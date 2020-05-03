@@ -26,3 +26,5 @@ sierpinski-film:
 	# Ohne Sound
 	mencoder -of lavf -oac mp3lame -lameopts abr:br=56 -srate 22050 -ovc lavc -lavcopts vcodec=flv:vbitrate=500:mbd=2:mv0:trell:
 
+# make -C /heim/hanno/c/framebuffer/plot-freetypetext-turtlegraphik/ turtle-plot-pnm 2>/tmp/e && ./turtle-plot-pnm -t 2 2> /tmp/1
+# make -C /home/hanno/c/framebuffer/plot-freetypetext-turtlegraphik/ turtle-plot-pnm 2>/tmp/e && ./turtle-plot-pnm -t 2 2> /tmp/1
