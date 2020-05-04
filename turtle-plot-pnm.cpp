@@ -1077,32 +1077,32 @@ class cbrese : public ctrue_type_font {
     breseline( ru, ro, farbe_rand_rechts);
     breseline( ro, lo, farbe_rand_oben  );
     breseline( lo, lu, farbe_rand_links );
-if (mit_skala) {
-    // Skala
-    set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
-    char labelc[] =  "0123456789";
-    double hundert;
-    hundert = 100;
-    for (int yy=0; yy < ver; yy += hundert) {
-      breseline( (INTPAIR){ 0          , yy}, (INTPAIR){ hor/100, yy}, strich_links );
-      breseline( (INTPAIR){ hor-hor/100, yy}, (INTPAIR){ hor - 1, yy}, strich_rechts);
-      breseline( (INTPAIR){ 0          , yy}, (INTPAIR){ hor - 1, yy}, strich_rechts);
-      snprintf( labelc, 10, "%d", yy);
-      u32string label = chararray_to_u32string( labelc);
-      set_text_pt( 20); 
-      main32( label, hor/100, yy,  0);
+    if (mit_skala) {
+      // Skala
+      set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
+      char labelc[] =  "0123456789";
+      double hundert;
+      hundert = 100;
+      for (int yy=0; yy < ver; yy += hundert) {
+        breseline( (INTPAIR){ 0          , yy}, (INTPAIR){ hor/100, yy}, strich_links );
+        breseline( (INTPAIR){ hor-hor/100, yy}, (INTPAIR){ hor - 1, yy}, strich_rechts);
+//      breseline( (INTPAIR){ 0          , yy}, (INTPAIR){ hor - 1, yy}, strich_rechts);
+        snprintf( labelc, strlen( labelc), "%d", yy);
+        u32string label = chararray_to_u32string( labelc);
+        set_text_pt( 20); 
+        main32( label, hor/100, yy,  0);
+      }
+      hundert = 200;
+      for (int xx=0; xx < hor; xx += hundert) {
+        breseline( (INTPAIR){ xx, 0          }, (INTPAIR){ xx, ver/100}, strich_oben  );
+        breseline( (INTPAIR){ xx, ver-ver/100}, (INTPAIR){ xx, ver- 1 }, strich_unten );
+//      breseline( (INTPAIR){ xx, 0          }, (INTPAIR){ xx, ver- 1 }, strich_unten );
+        snprintf( labelc, strlen( labelc), "%d", xx);
+        u32string label = chararray_to_u32string( labelc);
+        set_text_pt( 20); 
+        main32( label, xx, ver-ver/100,  0);
+      }
     }
-    hundert = 200;
-    for (int xx=0; xx < hor; xx += hundert) {
-      breseline( (INTPAIR){ xx, 0          }, (INTPAIR){ xx, ver/100}, strich_oben  );
-      breseline( (INTPAIR){ xx, ver-ver/100}, (INTPAIR){ xx, ver- 1 }, strich_unten );
-      breseline( (INTPAIR){ xx, 0          }, (INTPAIR){ xx, ver- 1 }, strich_unten );
-      snprintf( labelc, 10, "%d", xx);
-      u32string label = chararray_to_u32string( labelc);
-      set_text_pt( 20); 
-      main32( label, xx, ver-ver/100,  0);
-    }
-}
   }
 
 };
@@ -1119,7 +1119,7 @@ class cabbild : public cbrese {
 
   public:
   cabbild( int hor, int ver, int deep, string progname) : cbrese( hor, ver, deep, progname) {
-    debug_skala = false;
+    debug_skala = true;
     welt_min_x= -4000.0,
     welt_max_x=  4000.0,
     welt_min_y= -4000.0,
@@ -1143,6 +1143,9 @@ class cabbild : public cbrese {
     if (false) fprintf( stderr, "A070 welt_max_y=%f\n", welt_max_y);
   }
   cabbild() {}
+  void weltline(      double alt_ort_x   , double alt_ort_y   , double igel_ort_x   , double igel_ort_y , RGB igel_farbe) {
+    breseline(      abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
+  }
   void show_limits() {
     cerr
       << "...."
@@ -1230,7 +1233,7 @@ class cabbild : public cbrese {
     if (debug_skala) cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx koperta_welt" << endl;
   }
 
-  struct sskala { 
+  struct sskala {
     double pov_pos; vector<double> marke;
     void zeichne_die_marken_ins_bild( cabbild *diss, char x_oder_y) {
 //    int result4 = (*this.*funktion)( 1.0);
@@ -1240,7 +1243,7 @@ class cabbild : public cbrese {
     double schritt;
 
     if (diss->debug_skala) {
-      cerr << "S050" << x_oder_y << " ";
+      cerr << "S050 " << x_oder_y << " ";
       for (int ii=0; ii<marke.size(); ii++) {
         cerr << setw(4) << setfill(' ') << marke[ii] << " ";
       }
@@ -1248,7 +1251,7 @@ class cabbild : public cbrese {
         << " pov_pos= "  << pov_pos
         << endl;
 
-      cerr << "S051" << x_oder_y << " ";
+      cerr << "S051 " << x_oder_y << " ";
       for (int ii=0; ii<marke.size(); ii++) {
         cerr << setw(4) << setfill(' ') << marke[ii] * pov_pos << " ";
       }
@@ -1256,46 +1259,50 @@ class cabbild : public cbrese {
     }
       switch (x_oder_y) {
         case 'x':
-    if (diss->debug_skala) {
-            cerr << "S052" << x_oder_y << " ";
-            for (int ii=0; ii<marke.size(); ii++) {
-              int xx = diss->abbildx( marke[ii] * pov_pos);
-              cerr << setw(4) << setfill(' ') << xx << " ";
+            if (diss->debug_skala) {
+              cerr << "S052 " << x_oder_y << " ";
+              for (int ii=0; ii<marke.size(); ii++) {
+                int x_koordinate_der_marke = diss->abbildx( marke[ii] * pov_pos);
+                cerr << setw(4) << setfill(' ') << x_koordinate_der_marke << " ";
+              }
+              cerr << endl;
+              cerr << "S022 " << x_oder_y << " ";
             }
-            cerr << endl;
-            cerr << "S022" << x_oder_y << " ";
-    }
             for (int ii=0; ii<marke.size(); ii++) {
               double mx = marke[ii] * pov_pos;
-              int xx = diss->abbildx( mx);
-//            snprintf( labelc, label_size, "%4.0f %d", mx, xx);
+              int x_koordinate_der_marke = diss->abbildx( mx);
+//            snprintf( labelc, label_size, "%4.0f %d", mx, x_koordinate_der_marke);
               snprintf( labelc, label_size, "%4.0f"   , mx    );
               u32string label = diss->chararray_to_u32string( labelc);
 //            cerr << label.c_str() << " ";
+              diss->breseline( x_koordinate_der_marke,                0, x_koordinate_der_marke, diss->ver*1/100, diss->rot);
+              diss->breseline( x_koordinate_der_marke, diss->ver*99/100, x_koordinate_der_marke, diss->ver,       diss->rot);
               diss->set_text_pt( 20);
-              diss->main32( label, xx, diss->ver-diss->ver/40.0, 10.0);
+              diss->main32( label, x_koordinate_der_marke, diss->ver-diss->ver/100.0, 10.0);
               if (diss->debug_skala) cerr << labelc << " ";
             }
             if (diss->debug_skala) cerr << endl;
           break;
         case 'y':
-    if (diss->debug_skala) {
-            cerr << "S052" << x_oder_y << " ";
-            for (int ii=0; ii<marke.size(); ii++) {
-              int yy = diss->abbildy( marke[ii] * pov_pos);
-              cerr << setw(4) << setfill(' ') << yy << " ";
+            if (diss->debug_skala) {
+              cerr << "S052 " << x_oder_y << " ";
+              for (int ii=0; ii<marke.size(); ii++) {
+                int y_koordinate_der_marke = diss->abbildy( marke[ii] * pov_pos);
+                cerr << setw(4) << setfill(' ') << y_koordinate_der_marke << " ";
+              }
+              cerr << endl;
+              cerr << "S022 " << x_oder_y << " ";
             }
-            cerr << endl;
-            cerr << "S022" << x_oder_y << " ";
-    }
             for (int ii=0; ii<marke.size(); ii++) {
-              int yy = diss->abbildy( marke[ii] * pov_pos);
-//            snprintf( labelc, label_size, "%4.0f %d", marke[ii] * pov_pos, yy);
+              int y_koordinate_der_marke = diss->abbildy( marke[ii] * pov_pos);
+//            snprintf( labelc, label_size, "%4.0f %d", marke[ii] * pov_pos, y_koordinate_der_marke);
               snprintf( labelc, label_size, "%4.0f"   , marke[ii] * pov_pos    );
               u32string label = diss->chararray_to_u32string( labelc);
 //            cerr << label.c_str() << " ";
+              diss->breseline( 0,                y_koordinate_der_marke, diss->hor*1/100, y_koordinate_der_marke, diss->gelb);
+              diss->breseline( diss->hor*99/100, y_koordinate_der_marke, diss->hor,       y_koordinate_der_marke, diss->gelb);
               diss->set_text_pt( 20);
-              diss->main32( label, diss->hor/20.0, yy, 10.0);
+              diss->main32( label, diss->hor/100.0, y_koordinate_der_marke, 10.0);
               if (diss->debug_skala) cerr << labelc << " ";
             }
             if (diss->debug_skala) cerr << endl;
@@ -1410,11 +1417,11 @@ class cturtle : public ctitel {
     // to do : clipping 
     if (igel_art != stiftart::AUS) {
       if (false) fprintf( stderr, "L010 breseline( %4.2f %4.2f %4.2f %4.2f)\n", alt_ort.x, alt_ort.y, igel_ort.x, igel_ort.y);
-      breseline( abbildx( alt_ort.x),
-                 abbildy( alt_ort.y),
-                 abbildx( igel_ort.x),
-                 abbildy( igel_ort.y),
-                 igel_farbe);
+      weltline( alt_ort.x,
+                alt_ort.y,
+                igel_ort.x,
+                igel_ort.y,
+                igel_farbe);
     }
   }
   
@@ -1892,7 +1899,7 @@ class cerprobe_brese : public cbrese {
 //  breseline( lu.x, lu.y, ro.x, ro.y, (RGB){ (WORT)0x00, (WORT)0xff, (WORT)0xff});
 */
     koperta_raster( true);
-    druck_pnm( "/tmp/turtle/turtle-011-cerprobe_brese.pnm");
+    druck_pnm( "/tmp/turtle/turtle-013-cerprobe_brese.pnm");
   }
 };
 
@@ -1911,12 +1918,12 @@ class cerprobe_brese_mit_ctrue_type_font : public cbrese {
       set_textfarbe( magenta);
 //  main32( wort,                                            xx,  yy,   ww);
     main32( U"erprobe_brese_DejaVuSerif.ttf 50, 550, +13", 50, 550,  +13);
-    druck_pnm( "/tmp/turtle/turtle-012-cerprobe_brese_mit_ctrue_type_font-01.pnm");
+    druck_pnm( "/tmp/turtle/turtle-011-cerprobe_brese_mit_ctrue_type_font-01.pnm");
 
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
       set_textfarbe( gelb);
     main32( U"cerprobe_brese_UbuntuMono-R.ttf 50, 550, -13", 50, 50,  -13);
-    druck_pnm( "/tmp/turtle/turtle-013-cerprobe_brese_mit_ctrue_type_font-02.pnm");
+    druck_pnm( "/tmp/turtle/turtle-012-cerprobe_brese_mit_ctrue_type_font-02.pnm");
 
     // Zeichne ein Kreuz aus Diagonalen
     breseline( 0, 0     , hor, ver, tuerkis);
