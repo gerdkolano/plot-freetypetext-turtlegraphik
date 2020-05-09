@@ -1,5 +1,10 @@
-/* Hannos Bildschirme 20.5'' mal 11.5'',
+/* sudo apt install libfreetype6-dev  -y
+ * pushd /usr/share/fonts/truetype
+ * sudo ln -s ubuntu ubuntu-font-family
+ * Hannos Bildschirme 20.5'' mal 11.5'',
  * ca 93 dpi in beide Richtungen in beide Richtungen
+ * leto 1600x900
+ * zoe 1920x1080
 */
 #include <linux/fb.h>   // framebuffer
 #include <sys/mman.h>   // framebuffer
@@ -11,9 +16,9 @@
 #include FT_FREETYPE_H
 #include FT_GLYPH_H    // FT_Glyph
 
-#include <stdlib.h> // calloc atoi atof
+#include <stdlib.h> // calloc atoi atof exit
 #include <stdio.h>  // fprintf fwrite
-#include <unistd.h> // getcwd
+#include <unistd.h> // getcwd close
 #include <errno.h>  // errno
 #include <math.h>   // round ceil
 #include <string>   // c++ string g++ --std=c++11 u32string
@@ -233,9 +238,18 @@ class cframebuffer : public cbildpnm {
       if (debug_framebuffer) fprintf( stderr, "FB24  vinfo.xoffset x vinfo.yoffset %dx%d\n",        vinfo.xoffset, vinfo.yoffset);
 
       // Figure out the size of the screen in bytes
-      screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+      INTPAIR HORxVER;
+      bool host_johnny; host_johnny = false;
+      if (host_johnny) {
+        HORxVER.x = 1920;
+        HORxVER.y = 1080;
+        screensize = 1920 * 1080 * vinfo.bits_per_pixel / 8;
+      } else {
+        HORxVER.x = vinfo.xres;
+        HORxVER.y = vinfo.yres;
+        screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+      }
 
-//    fprintf( stderr, "FB26 screensize=%ld bytes\n", screensize);
       if (debug_framebuffer) fprintf( stderr, "FB26  screensize=%d*%d*%d vinfo.bits_per_pixel/8=%ld bytes\n",
           vinfo.xres, vinfo.yres, vinfo.bits_per_pixel/8, screensize);
 
@@ -247,33 +261,18 @@ class cframebuffer : public cbildpnm {
       }
       if (debug_framebuffer) fprintf( stderr, "FB28  The framebuffer device was mapped to memory %p.\n", (void *)framebufferpointer);
       if (debug_framebuffer) fprintf( stderr, "FB30 Konstruktor fertig cframebuffer() this= %p\n\n", this);
-      INTPAIR HORxVER;
-      HORxVER.x = vinfo.xres;
-      HORxVER.y = vinfo.yres;
       return HORxVER;
 
     }
 
-  void plotf(int x, int y, int farbe) {
+  void plotf(int x, int y, int red, int green, int blue) {
     long int location = 0;
 
     // Figure out where in memory to put the pixel
 
     location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
                (y+vinfo.yoffset) * finfo.line_length;
-    int red, green, blue;
     if (vinfo.bits_per_pixel == 32) {
-      switch (farbe/10%8) {
-        case  0: red=  0; green=  0; blue=  0; break;
-        case  1: red=  0; green=  0; blue=254; break;
-        case  2: red=  0; green=254; blue=  0; break;
-        case  3: red=  0; green=254; blue=254; break;
-        case  4: red=254; green=  0; blue=  0; break;
-        case  5: red=254; green=  0; blue=254; break;
-        case  6: red=254; green=254; blue=  0; break;
-        case  7: red=254; green=254; blue=254; break;
-        default: red=128; green=128; blue=128; break;
-      }
       // Pointer-Arithmetik ist hier die gewöhnliche Arithmetik, weil framebufferpointer auf char zeigt.
       *(framebufferpointer + location)     = blue;
       *(framebufferpointer + location + 1) = green;
@@ -281,15 +280,27 @@ class cframebuffer : public cbildpnm {
       *(framebufferpointer + location + 3) = 0;      // No transparency
       //location += 4;
 //    fprintf( stderr, "FB40 x=%4d y=%4d farbe=%06x\n", x, y, farbe);
-    } else  { //assume 16bpp
+    } else  {
       fprintf( stderr, "FB88 vinfo.bits_per_pixel != 32 sondern %d\n", vinfo.bits_per_pixel);
       return;
-      int blue  = 10;
-      int green = (x-100)/6;        // A little green
-      int red   = 31-(y-100)/16;    // A lot of red
-      unsigned short int tt = red<<11 | green << 5 | blue;
-      *((unsigned short int*)(framebufferpointer + location)) = tt;
     }
+  }
+
+  void plotf( int x, int y, int farbe) {
+    int red, green, blue;
+    switch (farbe/10%8) {
+      case  0: red=  0; green=  0; blue=  0; break;
+      case  1: red=  0; green=  0; blue=254; break;
+      case  2: red=  0; green=254; blue=  0; break;
+      case  3: red=  0; green=254; blue=254; break;
+      case  4: red=254; green=  0; blue=  0; break;
+      case  5: red=254; green=  0; blue=254; break;
+      case  6: red=254; green=254; blue=  0; break;
+      case  7: red=254; green=254; blue=254; break;
+      default: red=128; green=128; blue=128; break;
+    }
+    plotf( x, y, red, green, blue); 
+    // *((unsigned short int*)(framebufferpointer + location)) = tt;
   }
 };
 
@@ -1272,7 +1283,7 @@ class cabbild : public cbrese {
               double mx = marke[ii] * pov_pos;
               int x_koordinate_der_marke = diss->abbildx( mx);
 //            snprintf( labelc, label_size, "%4.0f %d", mx, x_koordinate_der_marke);
-              snprintf( labelc, label_size, "%4.0f"   , mx    );
+              snprintf( labelc, label_size, "%.0f"   , mx    );
               u32string label = diss->chararray_to_u32string( labelc);
 //            cerr << label.c_str() << " ";
               diss->breseline( x_koordinate_der_marke,                0, x_koordinate_der_marke, diss->ver*1/100, diss->rot);
@@ -1296,7 +1307,7 @@ class cabbild : public cbrese {
             for (int ii=0; ii<marke.size(); ii++) {
               int y_koordinate_der_marke = diss->abbildy( marke[ii] * pov_pos);
 //            snprintf( labelc, label_size, "%4.0f %d", marke[ii] * pov_pos, y_koordinate_der_marke);
-              snprintf( labelc, label_size, "%4.0f"   , marke[ii] * pov_pos    );
+              snprintf( labelc, label_size, "%.0f"   , marke[ii] * pov_pos    );
               u32string label = diss->chararray_to_u32string( labelc);
 //            cerr << label.c_str() << " ";
               diss->breseline( 0,                y_koordinate_der_marke, diss->hor*1/100, y_koordinate_der_marke, diss->gelb);
@@ -3204,10 +3215,10 @@ int main (int argc, char *argv[]) {
   
   string pathname( cwd);
   string progname( argv[0]);
-bool alle_proben = true;
+bool alle_proben = false;
 if (alle_proben) {
-}
   clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
+}
 if (alle_proben) {
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
