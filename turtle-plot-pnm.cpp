@@ -328,6 +328,88 @@ if (false) {
   }
   ctrue_type_font() {}
 
+/* utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 */
+/*
+  Basic UTF-8 manipulation routines
+  by Jeff Bezanson
+  placed in the public domain Fall 2005
+
+  This code is designed to provide the utilities you need to manipulate
+  UTF-8 as an internal string encoding. These functions do not perform the
+  error checking normally needed when handling UTF-8 data, so if you happen
+  to be from the Unicode Consortium you will want to flay me alive.
+  I do this because error checking can be performed at the boundaries (I/O),
+  with these routines reserved for higher performance on data known to be
+  valid.
+*/
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+
+int u8_toucs(u_int32_t *dest, int sz, char *src, int srcsz) {
+  static constexpr u_int32_t offsetsFromUTF8[6] = {
+    0x00000000UL, 0x00003080UL, 0x000E2080UL,
+    0x03C82080UL, 0xFA082080UL, 0x82082080UL
+  };
+
+  static constexpr char trailingBytesForUTF8[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5
+  };
+
+    u_int32_t ch;
+    char *src_end = src + srcsz;
+    int nb;
+    int i=0;
+
+    while (i < sz-1) {
+        nb = trailingBytesForUTF8[(unsigned char)*src];
+        if (srcsz == -1) {
+            if (*src == 0)
+                goto done_toucs;
+        }
+        else {
+            if (src + nb >= src_end)
+                goto done_toucs;
+        }
+        ch = 0;
+        switch (nb) {
+            /* these fall through deliberately */
+        case 3: ch += (unsigned char)*src++; ch <<= 6;
+        case 2: ch += (unsigned char)*src++; ch <<= 6;
+        case 1: ch += (unsigned char)*src++; ch <<= 6;
+        case 0: ch += (unsigned char)*src++;
+        }
+        ch -= offsetsFromUTF8[nb];
+        dest[i++] = ch;
+    }
+ done_toucs:
+    dest[i] = 0;
+    return i;
+}
+
+u32string utf8chars_to_u32string( char * utf8_text) {
+  u32string u32wort_aus_utf8;
+//u32wort_aus_utf8 = U"ABCÄÖÜäöüßł";
+  int sz = 4*strlen( utf8_text) + 4;
+  u_int32_t dest[sz];
+  int number_of_characters_converted = u8_toucs( dest, sz, utf8_text, -1);
+    for (int ii = 0; ii < number_of_characters_converted; ii++) {
+      char32_t buchstabe = dest[ii];
+      u32wort_aus_utf8.push_back( buchstabe);
+    }
+  return u32wort_aus_utf8;
+}
+
+/* utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 utf-8 */
+
   private:
   int textfenster_origin_x, textfenster_origin_y;
   int textfenster_height, textfenster_width;
@@ -1511,15 +1593,22 @@ class cerprobe_true_type_font : public ctrue_type_font {
   }
   void druck_eine_zeile( u32string wort, double xx, double yy, double ww) {
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
-    main32( wort, xx, yy,  ww+3);
+    main32( wort, xx, yy,  ww+6);
     main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", wort, xx, yy,  ww);
     druck_pnm( "/tmp/turtle/turtle-004-cerprobe_true_type_font-01.pnm");
   }
   void eine_methode_von_cerprobe_true_type_font_ruft( string wort) {
     cerr << "P010 wort=" << wort << " progname=\"" << progname << "\"" << endl;
-    char text[] = "\101\344ABdeäölüß ttf-probe";
-    u32string text32 = chararray_to_u32string( text);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 600,  -7);
+    set_text_pt( 40);
+    char text1[] = "\101\344ABdeäölüß chararray_to_u32string";
+    char text2[] =    "\101äABdeäölüß utf8chars_to_u32string";
+    u32string text32;
+
+    text32 = chararray_to_u32string( text1);
+    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 700,  -4);
+
+    text32 = utf8chars_to_u32string( text2);
+    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 750,  -7);
     druck_pnm( "/tmp/turtle/turtle-005-cerprobe_true_type_font-02.pnm");
   }
 
@@ -1689,10 +1778,10 @@ class csierpinski_turtle : public cturtle {
     initturtle( -2.0, -2.0, 5.47, 2.2);
     film_machen( false, "/data7/tmp/sierpinski-turtle", "");
     // Zeichenfläche in int Pixelkoordinaten
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
     set_text_pt( 40); set_text_dpi( 100);
     main32( U"  Wacław Sierpiński - Dreieck", 300, 1000, 60);
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
     main32( U"Sierpinski-Dreiecke", 60, ver, 90);
 
     penstyle( stiftart::AUS);
@@ -1923,13 +2012,13 @@ class cerprobe_brese_mit_ctrue_type_font : public cbrese {
   cerprobe_brese_mit_ctrue_type_font( string progname, string dateiname, int hor, int ver, int deep) : cbrese( hor, ver, deep, progname) {
     std::cerr << "Z058  cerprobe_brese_mit_ctrue_type_font( string) progname= " << progname << std::endl;
 
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
 //  set_text_pt( 100); set_text_dpi( 400); main32( U"Ägp|", 0, 1079 - 194, 0.0/*Grad*/);
     set_text_pt( 100); set_text_dpi( 550); main32( U"Ägp|" , 0, 1079 -   0, 0.0/*Grad*/);
     set_text_pt( 50); set_text_dpi( 100);
       set_textfarbe( magenta);
 //  main32( wort,                                            xx,  yy,   ww);
-    main32( U"erprobe_brese_DejaVuSerif.ttf 50, 550, +13", 50, 550,  +13);
+    main32( U"erprobe_brese_DéjàVuSerif.ttf 50, 550, +13", 50, 550,  +13);
     druck_pnm( "/tmp/turtle/turtle-011-cerprobe_brese_mit_ctrue_type_font-01.pnm");
 
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
@@ -3217,14 +3306,14 @@ int main (int argc, char *argv[]) {
   
   string pathname( cwd);
   string progname( argv[0]);
-bool alle_proben = true;
+bool alle_proben = false;
 if (alle_proben) {
   clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
-}
-if (alle_proben) {
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
+}
   cerprobe_true_type_font            rufl( "erpr_ttf " + pathname + "/" + progname, "", 1280, 960, 65535);
+if (alle_proben) {
 
   cerprobe_bildpnm                   rufa( "plott "    + pathname + "/" + progname, "",    4,    3,   255);
   cerprobe_brese_mit_ctrue_type_font rufB( "brese "    + pathname + "/" + progname, "", 1920, 1080, 65535);
