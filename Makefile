@@ -1,8 +1,5 @@
-turtle-plot-pnm: turtle-plot-pnm.o
-	g++ --std=c++11 -o turtle-plot-pnm turtle-plot-pnm.o -lfreetype
-
-turtle-plot-pnm.o: turtle-plot-pnm.cpp
-	g++ --std=c++11 -c -o turtle-plot-pnm.o turtle-plot-pnm.cpp  -I/usr/include/freetype2
+turtle-plot-pnm: turtle-plot-pnm.cpp
+	g++ --std=c++11 -o turtle-plot-pnm turtle-plot-pnm.cpp -I/usr/include/freetype2 -lfreetype
 
 SHELL=/bin/bash
 Bush-31a-film:

@@ -1,4 +1,5 @@
 /* sudo apt install libfreetype6-dev  -y
+ * sudo adduser hanno video
  * pushd /usr/share/fonts/truetype
  * sudo ln -s ubuntu ubuntu-font-family
  * Hannos Bildschirme 20.5'' mal 11.5'',
@@ -1586,7 +1587,7 @@ class csierpinski_ohne_turtle : public cturtle {
     this->color = (RGB){ red, green, blue};
   }
 
-  int getch() {}
+  void getch() {}
   void initwindow( int maxx, int maxy){ initturtle( 0, 0, maxx, maxy);}
   void closegraph(){ closeturtle();}
   // https://www.geeksforgeeks.org/sierpinski-triangle-using-graphics/?ref=rp
@@ -1829,7 +1830,7 @@ class ckoch_turtle : public cturtle {
     druck_pnm( "/tmp/turtle/turtle-010-ckoch_turtle.pnm");
   }
 
-  int kokurva() {
+  void kokurva() {
     pencolor( koch_farbe_e);
     penstyle( stiftart::AUS);
     move( -0.35);
@@ -1857,7 +1858,7 @@ class ckoch_turtle : public cturtle {
     turn( 90.0);
   }
 
-  int kokurve( float eins_acht) {
+  void kokurve( float eins_acht) {
     pencolor( koch_farbe_c);
     penstyle( stiftart::AN);
     if (false) for (int count=0;count<5;count++) {
@@ -2274,7 +2275,7 @@ class capfelmann : public cturtle {
     return (RGB){ red, green, blue};
   }
 
-  int streifen( INTPAIR punkte,
+  void streifen( INTPAIR punkte,
                 DOUBLEPAIR min, DOUBLEPAIR max,
                 int rechentiefe) {
     int xx, yy;
@@ -2291,7 +2292,7 @@ class capfelmann : public cturtle {
       }
   }
 
-  int huepf( INTPAIR punkte,
+  void huepf( INTPAIR punkte,
              DOUBLEPAIR links_unten, DOUBLEPAIR rechts_oben,
              int rechentiefe) {
     int basis;
@@ -2450,7 +2451,7 @@ string generator_hilbert( int tief) {
   double li_re;
   bool gerundet;
 
-  int kante( double breit) {
+  void kante( double breit) {
     if (gerundet) {
       turn(   -90.0*li_re); penstyle( stiftart::AUS); move( breit/3.0);
       turn(   135.0*li_re); penstyle( stiftart::AN); move( breit/3.0*1.41421356); 
@@ -2461,7 +2462,7 @@ string generator_hilbert( int tief) {
     }
   }
 
-  int zeichne( string gen, double breit) {
+  void zeichne( string gen, double breit) {
     li_re =   1.0;
     int num_chars = gen.size();
     for ( int n = 0; n < num_chars; n++ ) {
@@ -3018,7 +3019,8 @@ struct chromosom {
   }
 
   template <class T>
-  vector<sregel> func2( std::initializer_list<T> list ) {
+//vector<sregel> func2( std::initializer_list<T> list ) {
+  void func2( std::initializer_list<T> list ) {
     for( auto elem : list ) {
       regel.push_back( elem);
       std::cout << elem << std::endl ;
@@ -3106,7 +3108,7 @@ void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, do
   druck_pnm( zieldatei);
 }
 
-  int zeichne( string gen, double breit, double winkel, double length_scale_factor) {
+  void zeichne( string gen, double breit, double winkel, double length_scale_factor) {
 //  cout << "Z012 zeichne breit= " << breit << " zeichne length_scale_factor= " << length_scale_factor << endl;
     struct zustand {
       double winkel;
@@ -3160,7 +3162,7 @@ void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, do
 //  cout << endl;
   }
 
-  int kante( double breit) {
+  void kante( double breit) {
     if (gerundet) {
 //    cerr << "K011 kante li_re= " << li_re << endl;
       turn(   -90.0*li_re); penstyle( stiftart::AUS); pencolor(        weisz); move( breit/3.0);
@@ -3215,7 +3217,7 @@ int main (int argc, char *argv[]) {
   
   string pathname( cwd);
   string progname( argv[0]);
-bool alle_proben = false;
+bool alle_proben = true;
 if (alle_proben) {
   clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
 }
