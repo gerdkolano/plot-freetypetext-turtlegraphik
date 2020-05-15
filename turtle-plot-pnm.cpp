@@ -39,7 +39,7 @@ class pixeltypen {
   public:
     typedef struct {int x, y;} INTPAIR;
     typedef struct {double x, y;} DOUBLEPAIR;
-    typedef short WORT;
+    typedef unsigned short WORT;
     typedef struct {WORT red, green, blue;} RGB;
     typedef struct { int hor; int ver; int deep; int bpp; string memo; } TBILD;
     RGB blaeulich     = (RGB){ (WORT)0x7fff, (WORT)0xefff, (WORT)0xbfff};
@@ -1500,6 +1500,7 @@ class cturtle : public ctitel {
     DOUBLEPAIR igel_ort;
     double     igel_richtung;
     RGB        igel_farbe;
+    int        igel_scal_vec_tur_erzeugen;
   } igel_status;
   cturtle( int hor, int ver, int deep, string progname) : ctitel( hor, ver, deep, progname) { }
   cturtle() {}
@@ -1516,8 +1517,85 @@ class cturtle : public ctitel {
                 igel_ort.x,
                 igel_ort.y,
                 igel_farbe);
+      if (scal_vec_tur_datei.is_open())
+      scal_vec_tur_line( alt_ort,
+                igel_ort,
+                igel_farbe);
     }
   }
+
+  int scal_vec_tur_hoch, scal_vec_tur_weit;
+  ofstream scal_vec_tur_datei;
+  void scal_vec_tur_initturtle( string scal_vec_tur_dateiname) {
+    scal_vec_tur_hoch = ver;   scal_vec_tur_weit = hor;
+    scal_vec_tur_hoch = 400;   scal_vec_tur_weit = 400;
+    scal_vec_tur_hoch = ver/2; scal_vec_tur_weit = ver/2;
+    scal_vec_tur_datei.open( scal_vec_tur_dateiname.c_str());
+    if (scal_vec_tur_datei.is_open()) {
+      scal_vec_tur_datei
+        << "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n"
+        << "<svg width=\""
+        << scal_vec_tur_weit
+        << "\" height=\""
+        << scal_vec_tur_hoch
+        << "\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n"
+        << "<title>Koch-Kurve</title>\n"
+        << "<desc>Koch rekursiv</desc>\n"
+        ;
+/*
+    fprintf( stdout, "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n");
+    fprintf( stdout, "<svg width=\"%d\" height=\"%d\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", scal_vec_tur_hoch, scal_vec_tur_weit);
+    fprintf( stdout, "<title>Koch-Kurve</title>\n");
+    fprintf( stdout, "<desc>Koch rekursiv</desc>\n");
+*/
+    }
+  }
+
+  void scal_vec_tur_line( DOUBLEPAIR alt_ort, DOUBLEPAIR igel_ort, RGB igel_farbe) {
+    /*
+              int o_x =  (1.0 +  alt_ort.x)/2.0 * scal_vec_tur_weit / 2;
+              int o_y =  (1.0 +  alt_ort.y)/2.0 * scal_vec_tur_hoch / 2;
+              int t_x =  (1.0 + igel_ort.x)/2.0 * scal_vec_tur_weit / 2;
+              int t_y =  (1.0 + igel_ort.y)/2.0 * scal_vec_tur_hoch / 2;
+    */
+              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
+              int o_x = (round(  alt_ort.x * scal_vec_tur_weit ) + 2*scal_vec_tur_weit) / 10;
+              int o_y = (round(  alt_ort.y * scal_vec_tur_hoch ) + 2*scal_vec_tur_hoch) / 10;
+              int t_x = (round( igel_ort.x * scal_vec_tur_weit ) + 2*scal_vec_tur_weit) / 10;
+              int t_y = (round( igel_ort.y * scal_vec_tur_hoch ) + 2*scal_vec_tur_hoch) / 10;
+              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
+    scal_vec_tur_datei
+      << "<line"
+      << " x1=\"" << o_x << "\""
+      << " y1=\"" << o_y << "\""
+      << " x2=\"" << t_x << "\""
+      << " y2=\"" << t_y << "\""
+      << " style=\"stroke:red; stroke-width:2px;\" />\n"
+      ;
+/*
+              fprintf( stdout, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\"", o_x,  o_y, t_x, t_y);
+              fprintf( stdout, " style=\"stroke:red; stroke-width:2px;\" />\n");
+*/
+  }
+
+void scal_vec_tur_moveto( DOUBLEPAIR punkt) {
+  switch (igel_art) {
+    case stiftart::AUS  : igel_ort = punkt; break;
+    default :
+    case stiftart::AN   :
+              DOUBLEPAIR alt_ort = igel_ort;
+              igel_ort = punkt;
+              int o_x =  (1.0 +  alt_ort.x)/2.0 * scal_vec_tur_weit;
+              int o_y =  (1.0 -  alt_ort.y)/2.0 * scal_vec_tur_hoch;
+              int t_x =  (1.0 + igel_ort.x)/2.0 * scal_vec_tur_weit;
+              int t_y =  (1.0 - igel_ort.y)/2.0 * scal_vec_tur_hoch;
+              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
+              fprintf( stdout, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\"", o_x,  o_y, t_x, t_y);
+              fprintf( stdout, " style=\"stroke:red; stroke-width:2px;\" />\n");
+              break;
+  }
+}
+
   
   void move( double dist) {
     moveto( (DOUBLEPAIR){ igel_ort.x + dist * cos( igel_richtung/180.0*M_PI),
@@ -1525,8 +1603,10 @@ class cturtle : public ctitel {
             );
   }
   
-  void initturtle( double turtle_min_x, double turtle_min_y, double turtle_max_x, double turtle_max_y) {
+  void initturtle( double turtle_min_x, double turtle_min_y, double turtle_max_x, double turtle_max_y, string scal_vec_tur_dateiname) {
     igel_status.igel_ort = (DOUBLEPAIR){ 0.5*(turtle_min_x+turtle_max_x), 0.5*(turtle_min_y+turtle_max_y)};
+    igel_status.igel_scal_vec_tur_erzeugen = 1;
+    igel_status.igel_scal_vec_tur_erzeugen = 0;
     igel_ort = (DOUBLEPAIR){ 0.5*(turtle_min_x+turtle_max_x), 0.5*(turtle_min_y+turtle_max_y)};
     pencolor( tuerkis);
     penstyle( stiftart::AN);
@@ -1535,6 +1615,9 @@ class cturtle : public ctitel {
 //  moveto((DOUBLEPAIR){ 0.0, 0.0});
     turnto( 0.0);
     igel_art = stiftart::AN;
+    if (igel_status.igel_scal_vec_tur_erzeugen == 1) {
+      scal_vec_tur_initturtle( scal_vec_tur_dateiname);
+    }
   }
   
   void pencolor( RGB farbe) { igel_farbe = farbe; } 
@@ -1545,7 +1628,12 @@ class cturtle : public ctitel {
   double turtle_angle() {   return igel_richtung;} 
   double turtle_x() {       return igel_ort.x;   } 
   double turtle_y() {       return igel_ort.y;   } 
-  void closeturtle() {} 
+  void closeturtle() {
+    if (scal_vec_tur_datei.is_open()) {
+      scal_vec_tur_datei << "</svg>" << endl;
+    }
+}
+
 };
 
 class cerprobe_turtle : public cturtle {
@@ -1554,7 +1642,7 @@ class cerprobe_turtle : public cturtle {
     std::cerr << "Z050  progname= " << progname << std::endl;
     // Zeichenfläche in int Pixelkoordinaten
     film_machen( false, "/data7/tmp/cerprobe_turtle", "");
-    initturtle( 0.0, 0.0, 1920.0, 1080.0);
+    initturtle( 0.0, 0.0, 1920.0, 1080.0, "/tmp/turtle/svg-008.svg");
     pencolor( blaeulich);
     penstyle( stiftart::AN);
     moveto((DOUBLEPAIR){0000.0,0000.0});
@@ -1641,7 +1729,7 @@ class csierpinski_ohne_turtle : public cturtle {
     std::cerr << "Z053  progname= " << progname << std::endl;
     // Zeichenfläche in int Pixelkoordinaten
 
-//  initturtle( -2.0, -2.0, 5.47, 2.2);
+//  initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-001.svg");
     main_sierpinski();
 //  closeturtle();
 
@@ -1677,7 +1765,7 @@ class csierpinski_ohne_turtle : public cturtle {
   }
 
   void getch() {}
-  void initwindow( int maxx, int maxy){ initturtle( 0, 0, maxx, maxy);}
+  void initwindow( int maxx, int maxy){ initturtle( 0, 0, maxx, maxy, "/tmp/turtle/svg-002.svg");}
   void closegraph(){ closeturtle();}
   // https://www.geeksforgeeks.org/sierpinski-triangle-using-graphics/?ref=rp
   // C++ code to implement 
@@ -1775,7 +1863,7 @@ class csierpinski_turtle : public cturtle {
     std::cerr << "Z054  progname= " << progname << std::endl;
     // Zeichenfläche in int Pixelkoordinaten
 
-    initturtle( -2.0, -2.0, 5.47, 2.2);
+    initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-003.svg");
     film_machen( false, "/data7/tmp/sierpinski-turtle", "");
     // Zeichenfläche in int Pixelkoordinaten
     set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
@@ -1821,7 +1909,7 @@ class cpythagoras_turtle : public cturtle {
     main32( U"Pythagoras-Baum", 50, ver, 90);
 
     // Zeichenfläche in double Weltkoordinaten
-    initturtle( -2.0, -2.0, 5.47, 2.2);
+    initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-004.svg");
     move( 0.2);
     /*
     move( 1.0);
@@ -1898,7 +1986,7 @@ class ckoch_turtle : public cturtle {
 
     film_machen( false, "/data7/tmp/koch2", "");
 
-    initturtle( -2.0, -2.0, 5.47, 2.2);
+    initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-005.svg");
     penstyle( stiftart::AUS);
     move(-2.7);
 
@@ -2079,6 +2167,101 @@ class cerprobe_abbild : public cabbild {
         );
 
     druck_pnm( "/tmp/turtle/turtle-015-cerprobe_abbild.pnm");
+  }
+};
+
+class cerprobe_svg : public cabbild {
+  public:
+    void svg_line( DOUBLEPAIR pa, DOUBLEPAIR pe, RGB farbe) {
+       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
+    }
+    void svg_line( INTPAIR pa, INTPAIR pe, RGB farbe) {
+       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
+    }
+    void svg_line( double x, double y, double xe, double ye, RGB farbe) {
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<line"
+          << " x1=\"" << x << "\""
+          << " y1=\"" << y << "\""
+          << " x2=\"" << xe << "\""
+          << " y2=\"" << ye << "\""
+          << " style=\"stroke:"
+          << "rgb(" << farbe.red/256 << ", " << farbe.green/256 << ", " << farbe.blue/256 << ")"
+          << "; stroke-width:2px;\" />\n"
+          ;
+      }
+    }
+    void svg_close() {
+      if (svg_datei.is_open()) {
+        svg_datei << "</svg>" << endl;
+        svg_datei.close();
+      }
+    }
+    ofstream svg_datei;
+    void svg_init( double weit, double hoch) {
+      string svg_dateiname;
+      svg_dateiname = "/tmp/turtle/svg-000.svg";
+      svg_datei.open( svg_dateiname.c_str());
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n"
+          << "<svg width=\""
+          << weit
+          << "\" height=\""
+          << hoch
+          << "\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n"
+          << "<title>Koch-Kurve</title>\n"
+          << "<desc>Koch rekursiv</desc>\n"
+          << "<rect width=\"100%\" height=\"100%\" fill=\"black\" />\n"
+          ;
+      }
+    }
+      
+//  void svg_line( int x, int y, int xe, int ye, RGB farbe) {} 
+  cerprobe_svg( string progname, string dateiname, int hor, int ver, int deep) : cabbild ( hor, ver, deep, progname) {
+    svg_init( hor, ver);
+
+    // Zeichenfläche in int Pixelkoordinaten
+    svg_line( 0, 0                , hor*9/10, ver*8/10, tuerkis);
+    svg_line( 0, ver*8/10, hor*9/10, 0                , magenta);
+
+    // Zeichenfläche in double Weltkoordinaten
+    DOUBLEPAIR igel_ort = { +2.0, +2.0};
+    DOUBLEPAIR  alt_ort = { -2.0, -2.0};
+    userworld( alt_ort.x, alt_ort.y, igel_ort.x, igel_ort.y);
+
+    svg_line( abbild( alt_ort), abbild( igel_ort), weisz);
+
+    // Zeichenfläche
+/*
+    fprintf( stderr, "A010 %f %f %f %f %d\n",
+               line__von_mitte.x  ,
+               line__von_mitte.y  ,
+               line_nach_mitte.x ,
+               line_nach_mitte.y ,
+               igel_farbe
+               );
+    fprintf( stderr, "A012 %d %d %d %d %d\n",
+               abbildx( line__von_mitte.x),
+               abbildy( line__von_mitte.y),
+               abbildx( line_nach_mitte.x),
+               abbildy( line_nach_mitte.y),
+               igel_farbe
+               );
+*/
+    // Mittelsenkrechte in double Weltkoordinaten
+    DOUBLEPAIR line__von_mitte = { (igel_ort.x + alt_ort.x) / 2.0, -2.0};
+    DOUBLEPAIR line_nach_mitte = { (igel_ort.x + alt_ort.x) / 2.0, +2.0};
+
+    svg_line(
+        abbildx( line__von_mitte.x),
+        abbildy( line__von_mitte.y),
+        abbildx( line_nach_mitte.x),
+        abbildy( line_nach_mitte.y),
+        weisz
+        );
+    svg_close();
   }
 };
 
@@ -2467,7 +2650,7 @@ class clindenmayer : public cturtle {
     clindenmayer( int tiefe) { }
     clindenmayer( string progname, string dateiname, int hor, int ver, int deep, int tiefe) : cturtle ( hor, ver, deep, progname) {
       std::cerr << "Z061  progname= " << progname << std::endl;
-      initturtle(    0.0,    0.0, 192.0, 108.0);
+      initturtle(    0.0,    0.0, 192.0, 108.0, "/tmp/turtle/svg-006.svg");
       pencolor( weisz);
       penstyle( stiftart::AN);
 //    koperta_raster();
@@ -2579,7 +2762,7 @@ struct chromosom;
     clindenmayer_2( string progname, string dateiname, int hor, int ver, int deep, int tiefe, bool alle_bilder) : cturtle ( hor, ver, deep, progname) {
       std::cerr << "Z062  progname= " << progname << std::endl;
       double skalierung = 1.0, breite = 1.0;
-      initturtle(    0.0,    0.0, 192.0, 108.0);
+      initturtle(    0.0,    0.0, 192.0, 108.0, "/tmp/turtle/svg-007.svg");
       pencolor( weisz);
       penstyle( stiftart::AN);
 //    koperta_raster();
@@ -3281,16 +3464,18 @@ void findAndReplaceAll(std::string & data, std::string toSearch, std::string rep
 
 int main (int argc, char *argv[]) {
   int opt, tief=4; double links=-2.0, rechts=1.0;
+  bool alle_proben = false;
   pixeltypen::INTPAIR punkte = (pixeltypen::INTPAIR) {1920, 1080};
-  while ((opt = getopt(argc, argv, "l:r:t:h:v:")) != -1) {
+  while ((opt = getopt(argc, argv, "al:r:t:h:v:")) != -1) {
     switch (opt) {
-    case 'l': links    = atof(optarg); break;
-    case 'r': rechts   = atof(optarg); break;
-    case 't': tief     = atoi(optarg); break;
-    case 'h': punkte.x = atoi(optarg); break;
-    case 'v': punkte.y = atoi(optarg); break;
+    case 'a': alle_proben = true;         break;
+    case 'l': links       = atof(optarg); break;
+    case 'r': rechts      = atof(optarg); break;
+    case 't': tief        = atoi(optarg); break;
+    case 'h': punkte.x    = atoi(optarg); break;
+    case 'v': punkte.y    = atoi(optarg); break;
     default: /* '?' */
-      fprintf(stderr, "Usage: )%s [-t tief] [-l links] [-r rechts] name\n", argv[0]);
+      fprintf(stderr, "Usage: )%s [-a] [-t tief] [-l links] [-r rechts] name\n", argv[0]);
       exit( EXIT_FAILURE);
     }
   }
@@ -3306,15 +3491,12 @@ int main (int argc, char *argv[]) {
   
   string pathname( cwd);
   string progname( argv[0]);
-bool alle_proben = false;
+
 if (alle_proben) {
   clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
-}
   cerprobe_true_type_font            rufl( "erpr_ttf " + pathname + "/" + progname, "", 1280, 960, 65535);
-if (alle_proben) {
-
   cerprobe_bildpnm                   rufa( "plott "    + pathname + "/" + progname, "",    4,    3,   255);
   cerprobe_brese_mit_ctrue_type_font rufB( "brese "    + pathname + "/" + progname, "", 1920, 1080, 65535);
   cerprobe_brese                     rufb( "brese "    + pathname + "/" + progname, "", 1920, 1080,   255);
@@ -3322,6 +3504,9 @@ if (alle_proben) {
   cerprobe_turtle                    rufd( "turtle "   + pathname + "/" + progname, "", 1920, 1080, 65535);
   ckoch_turtle                       rufe( "koch "     + pathname + "/" + progname, "", 1920, 1080, 65535);
   cpythagoras_turtle                 ruff( "pytha "    + pathname + "/" + progname, "", 1920, 1080, 65535);
+}
+  cerprobe_svg                       rufC( "svg "      + pathname + "/" + progname, "", 1920, 1080,   255);
+if (alle_proben) {
 }
 if (alle_proben) {
   csierpinski_turtle                 rufg( "sierp "    + pathname + "/" + progname, "", 1920, 1080, 65535);
