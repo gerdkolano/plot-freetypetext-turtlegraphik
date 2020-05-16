@@ -186,9 +186,93 @@ class cbildpnm : public pixeltypen {
   }
 };
 
-class cframebuffer : public cbildpnm {
+class svg_graphik : public cbildpnm {
   public:
-  cframebuffer( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {}
+    svg_graphik( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {}
+    svg_graphik() {}
+    string svg_dateiname;
+    ofstream svg_datei;
+  public:
+    void svg_init( double weit, double hoch, string svg_dateiname) {
+      this->svg_dateiname = svg_dateiname;
+      svg_datei.open( svg_dateiname.c_str());
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n"
+          << "<svg width=\""
+          << weit
+          << "\" height=\""
+          << hoch
+          << "\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n"
+          << "<title>Koch-Kurve</title>\n"
+          << "<desc>Koch rekursiv</desc>\n"
+          << "<rect width=\"100%\" height=\"100%\" fill=\"black\" />\n"
+          ;
+      } else {
+        cerr << "E010 " << svg_dateiname.c_str() << " nicht geöffnet" << endl;
+      }
+    }
+    void svg_line( DOUBLEPAIR pa, DOUBLEPAIR pe, RGB farbe) {
+       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
+    }
+    void svg_line( INTPAIR pa, INTPAIR pe, RGB farbe) {
+       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
+    }
+    void svg_line( double x, double y, double xe, double ye, RGB farbe) {
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<line"
+          << " x1=\"" << x << "\""
+          << " y1=\"" << y << "\""
+          << " x2=\"" << xe << "\""
+          << " y2=\"" << ye << "\""
+          << " style=\"stroke:"
+          << "rgb(" << farbe.red/256 << ", " << farbe.green/256 << ", " << farbe.blue/256 << ")"
+          << "; stroke-width:2px;\" />\n"
+          ;
+      }
+    }
+    void svg_text( char *worte, double xpos, double ypos, double winkel_deg, double xpivot, double ypivot) {
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<text"
+          << " x=\"" << xpos << "\""
+          << " y=\"" << ypos << "\""
+          << " font-size=\"20px\""
+          << " fill=\"red\""
+          << " transform=\"rotate(" << winkel_deg << " " << xpivot << "," << ypivot << ")\">"
+          << worte
+          << "</text>"
+          << endl;
+      }
+    }
+    void svg_text( string worte, double xpos, double ypos, double winkel_deg, double xpivot, double ypivot) {
+      if (svg_datei.is_open()) {
+        svg_datei
+          << "<text"
+          << " x=\"" << xpos << "\""
+          << " y=\"" << ypos << "\""
+          << " font-size=\"40px\""
+          << " fill=\"blue\""
+          << " transform=\"rotate(" << winkel_deg << " " << xpivot << " " << ypivot << ")\">"
+          << worte
+          << "</text>"
+          << endl;
+          // <text x="100" y="145" font-size="40px" fill="blue" transform="rotate(30 20,40)">I love SVG</text>
+      }
+    }
+    void svg_close() {
+      if (svg_datei.is_open()) {
+        svg_datei << "</svg>" << endl;
+        svg_datei.close();
+      }
+    }
+  
+};
+
+class cframebuffer : public svg_graphik {
+  public:
+  cframebuffer( int hor, int ver, int deep, string progname) : svg_graphik( hor, ver, deep, progname) {}
   private:
     char *framebufferpointer;
     int fbfiledescriptor;
@@ -1239,6 +1323,7 @@ class cabbild : public cbrese {
   cabbild() {}
   void weltline(      double alt_ort_x   , double alt_ort_y   , double igel_ort_x   , double igel_ort_y , RGB igel_farbe) {
     breseline(      abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
+    svg_line(       abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
   }
   void show_limits() {
     cerr
@@ -1500,7 +1585,7 @@ class cturtle : public ctitel {
     DOUBLEPAIR igel_ort;
     double     igel_richtung;
     RGB        igel_farbe;
-    int        igel_scal_vec_tur_erzeugen;
+    int        turtle_svg_erzeugen;
   } igel_status;
   cturtle( int hor, int ver, int deep, string progname) : ctitel( hor, ver, deep, progname) { }
   cturtle() {}
@@ -1517,84 +1602,8 @@ class cturtle : public ctitel {
                 igel_ort.x,
                 igel_ort.y,
                 igel_farbe);
-      if (scal_vec_tur_datei.is_open())
-      scal_vec_tur_line( alt_ort,
-                igel_ort,
-                igel_farbe);
     }
   }
-
-  int scal_vec_tur_hoch, scal_vec_tur_weit;
-  ofstream scal_vec_tur_datei;
-  void scal_vec_tur_initturtle( string scal_vec_tur_dateiname) {
-    scal_vec_tur_hoch = ver;   scal_vec_tur_weit = hor;
-    scal_vec_tur_hoch = 400;   scal_vec_tur_weit = 400;
-    scal_vec_tur_hoch = ver/2; scal_vec_tur_weit = ver/2;
-    scal_vec_tur_datei.open( scal_vec_tur_dateiname.c_str());
-    if (scal_vec_tur_datei.is_open()) {
-      scal_vec_tur_datei
-        << "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n"
-        << "<svg width=\""
-        << scal_vec_tur_weit
-        << "\" height=\""
-        << scal_vec_tur_hoch
-        << "\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n"
-        << "<title>Koch-Kurve</title>\n"
-        << "<desc>Koch rekursiv</desc>\n"
-        ;
-/*
-    fprintf( stdout, "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n");
-    fprintf( stdout, "<svg width=\"%d\" height=\"%d\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", scal_vec_tur_hoch, scal_vec_tur_weit);
-    fprintf( stdout, "<title>Koch-Kurve</title>\n");
-    fprintf( stdout, "<desc>Koch rekursiv</desc>\n");
-*/
-    }
-  }
-
-  void scal_vec_tur_line( DOUBLEPAIR alt_ort, DOUBLEPAIR igel_ort, RGB igel_farbe) {
-    /*
-              int o_x =  (1.0 +  alt_ort.x)/2.0 * scal_vec_tur_weit / 2;
-              int o_y =  (1.0 +  alt_ort.y)/2.0 * scal_vec_tur_hoch / 2;
-              int t_x =  (1.0 + igel_ort.x)/2.0 * scal_vec_tur_weit / 2;
-              int t_y =  (1.0 + igel_ort.y)/2.0 * scal_vec_tur_hoch / 2;
-    */
-              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
-              int o_x = (round(  alt_ort.x * scal_vec_tur_weit ) + 2*scal_vec_tur_weit) / 10;
-              int o_y = (round(  alt_ort.y * scal_vec_tur_hoch ) + 2*scal_vec_tur_hoch) / 10;
-              int t_x = (round( igel_ort.x * scal_vec_tur_weit ) + 2*scal_vec_tur_weit) / 10;
-              int t_y = (round( igel_ort.y * scal_vec_tur_hoch ) + 2*scal_vec_tur_hoch) / 10;
-              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
-    scal_vec_tur_datei
-      << "<line"
-      << " x1=\"" << o_x << "\""
-      << " y1=\"" << o_y << "\""
-      << " x2=\"" << t_x << "\""
-      << " y2=\"" << t_y << "\""
-      << " style=\"stroke:red; stroke-width:2px;\" />\n"
-      ;
-/*
-              fprintf( stdout, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\"", o_x,  o_y, t_x, t_y);
-              fprintf( stdout, " style=\"stroke:red; stroke-width:2px;\" />\n");
-*/
-  }
-
-void scal_vec_tur_moveto( DOUBLEPAIR punkt) {
-  switch (igel_art) {
-    case stiftart::AUS  : igel_ort = punkt; break;
-    default :
-    case stiftart::AN   :
-              DOUBLEPAIR alt_ort = igel_ort;
-              igel_ort = punkt;
-              int o_x =  (1.0 +  alt_ort.x)/2.0 * scal_vec_tur_weit;
-              int o_y =  (1.0 -  alt_ort.y)/2.0 * scal_vec_tur_hoch;
-              int t_x =  (1.0 + igel_ort.x)/2.0 * scal_vec_tur_weit;
-              int t_y =  (1.0 - igel_ort.y)/2.0 * scal_vec_tur_hoch;
-              //fprintf( stdout, "%f %f %f %f \n", old_x,  old_y, turtle_x, turtle_y);
-              fprintf( stdout, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\"", o_x,  o_y, t_x, t_y);
-              fprintf( stdout, " style=\"stroke:red; stroke-width:2px;\" />\n");
-              break;
-  }
-}
 
   
   void move( double dist) {
@@ -1603,10 +1612,10 @@ void scal_vec_tur_moveto( DOUBLEPAIR punkt) {
             );
   }
   
-  void initturtle( double turtle_min_x, double turtle_min_y, double turtle_max_x, double turtle_max_y, string scal_vec_tur_dateiname) {
+  void initturtle( double turtle_min_x, double turtle_min_y, double turtle_max_x, double turtle_max_y, string turtle_svg_dateiname) {
     igel_status.igel_ort = (DOUBLEPAIR){ 0.5*(turtle_min_x+turtle_max_x), 0.5*(turtle_min_y+turtle_max_y)};
-    igel_status.igel_scal_vec_tur_erzeugen = 1;
-    igel_status.igel_scal_vec_tur_erzeugen = 0;
+    igel_status.turtle_svg_erzeugen = 0;
+    igel_status.turtle_svg_erzeugen = 1;
     igel_ort = (DOUBLEPAIR){ 0.5*(turtle_min_x+turtle_max_x), 0.5*(turtle_min_y+turtle_max_y)};
     pencolor( tuerkis);
     penstyle( stiftart::AN);
@@ -1615,8 +1624,10 @@ void scal_vec_tur_moveto( DOUBLEPAIR punkt) {
 //  moveto((DOUBLEPAIR){ 0.0, 0.0});
     turnto( 0.0);
     igel_art = stiftart::AN;
-    if (igel_status.igel_scal_vec_tur_erzeugen == 1) {
-      scal_vec_tur_initturtle( scal_vec_tur_dateiname);
+//  cout << "i010 " << "turtle_svg_erzeugen: " << igel_status.turtle_svg_erzeugen << " svg_dateiname " << turtle_svg_dateiname << endl;
+    if (igel_status.turtle_svg_erzeugen == 1) {
+      cout << "i020 " << " turtle_svg_dateiname= " << turtle_svg_dateiname << endl;
+      svg_init( hor, ver, turtle_svg_dateiname);
     }
   }
   
@@ -1629,10 +1640,12 @@ void scal_vec_tur_moveto( DOUBLEPAIR punkt) {
   double turtle_x() {       return igel_ort.x;   } 
   double turtle_y() {       return igel_ort.y;   } 
   void closeturtle() {
-    if (scal_vec_tur_datei.is_open()) {
-      scal_vec_tur_datei << "</svg>" << endl;
+    if (svg_datei.is_open()) {
+      svg_datei << "</svg>" << endl;
+      svg_datei.close();
+      cout << "i090" << " closing svg_dateiname= " << svg_dateiname << endl;
     }
-}
+  }
 
 };
 
@@ -1866,10 +1879,10 @@ class csierpinski_turtle : public cturtle {
     initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-003.svg");
     film_machen( false, "/data7/tmp/sierpinski-turtle", "");
     // Zeichenfläche in int Pixelkoordinaten
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
     set_text_pt( 40); set_text_dpi( 100);
     main32( U"  Wacław Sierpiński - Dreieck", 300, 1000, 60);
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
     main32( U"Sierpinski-Dreiecke", 60, ver, 90);
 
     penstyle( stiftart::AUS);
@@ -2100,7 +2113,7 @@ class cerprobe_brese_mit_ctrue_type_font : public cbrese {
   cerprobe_brese_mit_ctrue_type_font( string progname, string dateiname, int hor, int ver, int deep) : cbrese( hor, ver, deep, progname) {
     std::cerr << "Z058  cerprobe_brese_mit_ctrue_type_font( string) progname= " << progname << std::endl;
 
-    set_text_font( "/usr/share/fonts/truetype/dejavu/DéjàVuSerif.ttf");
+    set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
 //  set_text_pt( 100); set_text_dpi( 400); main32( U"Ägp|", 0, 1079 - 194, 0.0/*Grad*/);
     set_text_pt( 100); set_text_dpi( 550); main32( U"Ägp|" , 0, 1079 -   0, 0.0/*Grad*/);
     set_text_pt( 50); set_text_dpi( 100);
@@ -2172,55 +2185,10 @@ class cerprobe_abbild : public cabbild {
 
 class cerprobe_svg : public cabbild {
   public:
-    void svg_line( DOUBLEPAIR pa, DOUBLEPAIR pe, RGB farbe) {
-       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
-    }
-    void svg_line( INTPAIR pa, INTPAIR pe, RGB farbe) {
-       svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
-    }
-    void svg_line( double x, double y, double xe, double ye, RGB farbe) {
-      if (svg_datei.is_open()) {
-        svg_datei
-          << "<line"
-          << " x1=\"" << x << "\""
-          << " y1=\"" << y << "\""
-          << " x2=\"" << xe << "\""
-          << " y2=\"" << ye << "\""
-          << " style=\"stroke:"
-          << "rgb(" << farbe.red/256 << ", " << farbe.green/256 << ", " << farbe.blue/256 << ")"
-          << "; stroke-width:2px;\" />\n"
-          ;
-      }
-    }
-    void svg_close() {
-      if (svg_datei.is_open()) {
-        svg_datei << "</svg>" << endl;
-        svg_datei.close();
-      }
-    }
-    ofstream svg_datei;
-    void svg_init( double weit, double hoch) {
-      string svg_dateiname;
-      svg_dateiname = "/tmp/turtle/svg-000.svg";
-      svg_datei.open( svg_dateiname.c_str());
-      if (svg_datei.is_open()) {
-        svg_datei
-          << "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"no\"?>\n"
-          << "<svg width=\""
-          << weit
-          << "\" height=\""
-          << hoch
-          << "\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n"
-          << "<title>Koch-Kurve</title>\n"
-          << "<desc>Koch rekursiv</desc>\n"
-          << "<rect width=\"100%\" height=\"100%\" fill=\"black\" />\n"
-          ;
-      }
-    }
       
 //  void svg_line( int x, int y, int xe, int ye, RGB farbe) {} 
   cerprobe_svg( string progname, string dateiname, int hor, int ver, int deep) : cabbild ( hor, ver, deep, progname) {
-    svg_init( hor, ver);
+    svg_init( hor, ver, "/tmp/turtle/svg-000.svg");
 
     // Zeichenfläche in int Pixelkoordinaten
     svg_line( 0, 0                , hor*9/10, ver*8/10, tuerkis);
@@ -2261,6 +2229,12 @@ class cerprobe_svg : public cabbild {
         abbildy( line_nach_mitte.y),
         weisz
         );
+    string sworte;
+    sworte = "..... s äöüßÄÖÜł";
+    char cworte[] = "c äöüßÄÖÜł";
+    for (double ww = 0.0; ww < 360.0; ww+=30.0) {
+      svg_text( sworte, 1000, 545,  ww, 1000, 545);
+    }
     svg_close();
   }
 };
@@ -3352,6 +3326,11 @@ vector<string> func2( std::initializer_list<T> list ) {
 
 void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, double skalierung, double breite, string zieldatei, u32string bildname) {
 //gerundet = false;
+  string svg_zieldatei;
+  svg_zieldatei = zieldatei;
+  svg_zieldatei.replace( svg_zieldatei.end()-4,svg_zieldatei.end()-0, ".svg");
+  initturtle(    0.0,    0.0, 192.0, 108.0, svg_zieldatei);
+
   koperta_welt(); pencolor( weisz); penstyle( stiftart::AN);
   DOUBLEPAIR startpunkt = (DOUBLEPAIR){ startx, starty};
   double winkelretter = turtle_angle();
@@ -3377,6 +3356,7 @@ void zeichneC( double startx, double starty, int tiefe, chromosom ein_cchrom, do
   pencolor ( farbe);
 
   turnto( winkelretter);
+  closeturtle();
   druck_pnm( zieldatei);
 }
 
@@ -3493,6 +3473,9 @@ int main (int argc, char *argv[]) {
   string progname( argv[0]);
 
 if (alle_proben) {
+}
+  cerprobe_svg                       rufC( "svg "      + pathname + "/" + progname, "", 1920, 1080,   255);
+if (alle_proben) {
   clindenmayer_2                       l2( "clindenmayer_2 " + pathname + "/" + progname, "", 1920, 1080, 65535, tief, alle_proben);
   clindenmayer                         l3( tief);
   clindenmayer                         l4( "clindenmayer "   + pathname + "/" + progname, "", 1920, 1080, 65535, 3);
@@ -3504,9 +3487,6 @@ if (alle_proben) {
   cerprobe_turtle                    rufd( "turtle "   + pathname + "/" + progname, "", 1920, 1080, 65535);
   ckoch_turtle                       rufe( "koch "     + pathname + "/" + progname, "", 1920, 1080, 65535);
   cpythagoras_turtle                 ruff( "pytha "    + pathname + "/" + progname, "", 1920, 1080, 65535);
-}
-  cerprobe_svg                       rufC( "svg "      + pathname + "/" + progname, "", 1920, 1080,   255);
-if (alle_proben) {
 }
 if (alle_proben) {
   csierpinski_turtle                 rufg( "sierp "    + pathname + "/" + progname, "", 1920, 1080, 65535);
