@@ -186,14 +186,20 @@ class cbildpnm : public pixeltypen {
   }
 };
 
-class svg_graphik : public cbildpnm {
+class csvg_graphik : public cbildpnm {
+    int last_x, last_y;
+    int pending_x, pending_y;
+    RGB farbe;
+    bool svg_path_pending;
   public:
-    svg_graphik( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {}
-    svg_graphik() {}
+    csvg_graphik( int hor, int ver, int deep, string progname) : cbildpnm( hor, ver, deep, progname) {}
+    csvg_graphik() {}
     string svg_dateiname;
     ofstream svg_datei;
   public:
     void svg_init( double weit, double hoch, string svg_dateiname) {
+      svg_path_pending = false;
+      last_x = std::numeric_limits<int>::max(); last_y = std::numeric_limits<int>::max();
       this->svg_dateiname = svg_dateiname;
       svg_datei.open( svg_dateiname.c_str());
       if (svg_datei.is_open()) {
@@ -208,6 +214,7 @@ class svg_graphik : public cbildpnm {
           << "<desc>Koch rekursiv</desc>\n"
           << "<rect width=\"100%\" height=\"100%\" fill=\"black\" />\n"
           ;
+//      svg_datei << "<path d=\"" << "M" ;
       } else {
         cerr << "E010 " << svg_dateiname.c_str() << " nicht geöffnet" << endl;
       }
@@ -217,6 +224,47 @@ class svg_graphik : public cbildpnm {
     }
     void svg_line( INTPAIR pa, INTPAIR pe, RGB farbe) {
        svg_line( pa.x, pa.y, pe.x, pe.y, farbe);
+    }
+    void svg_path( double x, double y, double xe, double ye, RGB farbe) {
+      if (svg_path_pending) {
+        if (x == pending_x and y == pending_y) {
+          svg_path_pending = true;
+          if (svg_datei.is_open()) svg_datei << "L" << pending_x << " " << pending_y << " " ;
+          pending_x = xe; pending_y = ye;
+        } else {
+          svg_path_pending = true;
+          this->farbe = farbe;
+          if (svg_datei.is_open()) svg_datei
+            << "L" << x  << " " << y  << " "
+            << "\" "
+            << "fill =\"none\" style=\"stroke:"
+            << "rgb(" << farbe.red/256 << ", " << farbe.green/256 << ", " << farbe.blue/256 << ")"
+            << "; stroke-width:2px;\" />\n"
+            ;
+          pending_x = xe; pending_y = ye;
+        }
+      } else {
+        this->farbe = farbe;
+        if (svg_datei.is_open()) svg_datei << "<path d=\"" << "M" << x  << " " << y  << " " ;
+        pending_x = xe; pending_y = ye;
+        svg_path_pending = true;
+      }
+    }
+    void obsolete_svg_path( double x, double y, double xe, double ye, RGB farbe) {
+      this->farbe = farbe;
+      if (svg_datei.is_open()) {
+        if (x == last_x and y == last_y) {
+          svg_datei
+            << "L" << xe << " " << ye << " "
+            ;
+        } else {
+          svg_datei
+            << x  << " " << y  << " "
+            << "L" << xe << " " << ye << " "
+            ;
+        }
+      }
+      last_x = xe; last_y = ye;
     }
     void svg_line( double x, double y, double xe, double ye, RGB farbe) {
       if (svg_datei.is_open()) {
@@ -246,13 +294,13 @@ class svg_graphik : public cbildpnm {
           << endl;
       }
     }
-    void svg_text( string worte, double xpos, double ypos, double winkel_deg, double xpivot, double ypivot) {
+    void svg_text( string worte, int svg_pix, double xpos, double ypos, double winkel_deg, double xpivot, double ypivot) {
       if (svg_datei.is_open()) {
         svg_datei
           << "<text"
           << " x=\"" << xpos << "\""
           << " y=\"" << ypos << "\""
-          << " font-size=\"40px\""
+          << " font-size=\"" << svg_pix << "px\""
           << " fill=\"blue\""
           << " transform=\"rotate(" << winkel_deg << " " << xpivot << " " << ypivot << ")\">"
           << worte
@@ -262,6 +310,15 @@ class svg_graphik : public cbildpnm {
       }
     }
     void svg_close() {
+      if (svg_path_pending) {
+        if (svg_datei.is_open()) svg_datei
+          << "L" << pending_x  << " " << pending_y  << " "
+          << "\" "
+          << "fill =\"none\" style=\"stroke:"
+          << "rgb(" << farbe.red/256 << ", " << farbe.green/256 << ", " << farbe.blue/256 << ")"
+          << "; stroke-width:2px;\" />\n"
+          ;
+      }
       if (svg_datei.is_open()) {
         svg_datei << "</svg>" << endl;
         svg_datei.close();
@@ -270,9 +327,9 @@ class svg_graphik : public cbildpnm {
   
 };
 
-class cframebuffer : public svg_graphik {
+class cframebuffer : public csvg_graphik {
   public:
-  cframebuffer( int hor, int ver, int deep, string progname) : svg_graphik( hor, ver, deep, progname) {}
+  cframebuffer( int hor, int ver, int deep, string progname) : csvg_graphik( hor, ver, deep, progname) {}
   private:
     char *framebufferpointer;
     int fbfiledescriptor;
@@ -403,10 +460,10 @@ class ctrue_type_font : public cframebuffer {
 if (false) {
     char text[] = "\101\344ABCdefäölüßghixyzLOKj";
     u32string text32 = chararray_to_u32string( text);
-    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
+    this->freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
 
     u32string ein_32wort = U"AäöüßÄÖłżźśńęąEфывапролджэ"; // ruft plot3
-    this->main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
+    this->freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
     druck_pnm( "/tmp/turtle/turtle-001-ctrue_type_font-02.pnm");
 }
   }
@@ -541,8 +598,8 @@ u32string utf8chars_to_u32string( char * utf8_text) {
     this->textfarbe = farbname;
   }
 
-  void main32( u32string ein32wort, double xpos, double ypos, double winkel_deg) {
-    main32( this->fontdateiname.c_str(), ein32wort, xpos, ypos, winkel_deg);
+  void freetype_text( u32string ein32wort, double xpos, double ypos, double winkel_deg) {
+    freetype_text( this->fontdateiname.c_str(), ein32wort, xpos, ypos, winkel_deg);
   }
 
   void draw_bitmap_nach_textfenster( FT_Bitmap*  bitmap, FT_Int      x, FT_Int      y) {
@@ -675,7 +732,7 @@ u32string utf8chars_to_u32string( char * utf8_text) {
               *abbox = bbox;
             }
 
-  int main32(
+  int freetype_text(
       const char *textfenster_filename,
       u32string ein32wort,
       double xpos, double ypos, double winkel_deg
@@ -905,7 +962,7 @@ for ( n = 0; n < num_glyphs; n++ ) {
     return 0;
   }
   
-  int main32_gute_erste_version(
+  int freetype_text_gute_erste_version(
       const char *textfenster_filename,
       u32string ein32wort,
       double xpos, double ypos, double winkel_deg
@@ -988,7 +1045,7 @@ for ( n = 0; n < num_glyphs; n++ ) {
     return 0;
   }
   
-  int main32_FreeType2_Mono(
+  int freetype_text_FreeType2_Mono(
       const char *textfenster_filename,
       u32string ein32wort,
       double xpos, double ypos, double winkel_deg
@@ -1268,7 +1325,7 @@ class cbrese : public ctrue_type_font {
         snprintf( labelc, strlen( labelc), "%d", yy);
         u32string label = chararray_to_u32string( labelc);
         set_text_pt( 20); 
-        main32( label, hor/100, yy,  0);
+        freetype_text( label, hor/100, yy,  0);
       }
       hundert = 200;
       for (int xx=0; xx < hor; xx += hundert) {
@@ -1278,7 +1335,7 @@ class cbrese : public ctrue_type_font {
         snprintf( labelc, strlen( labelc), "%d", xx);
         u32string label = chararray_to_u32string( labelc);
         set_text_pt( 20); 
-        main32( label, xx, ver-ver/100,  0);
+        freetype_text( label, xx, ver-ver/100,  0);
       }
     }
   }
@@ -1323,7 +1380,7 @@ class cabbild : public cbrese {
   cabbild() {}
   void weltline(      double alt_ort_x   , double alt_ort_y   , double igel_ort_x   , double igel_ort_y , RGB igel_farbe) {
     breseline(      abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
-    svg_line(       abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
+    svg_path(       abbildx( alt_ort_x), abbildy( alt_ort_y), abbildx( igel_ort_x), abbildy( igel_ort_y),     igel_farbe);
   }
   void show_limits() {
     cerr
@@ -1457,7 +1514,7 @@ class cabbild : public cbrese {
               diss->breseline( x_koordinate_der_marke,                0, x_koordinate_der_marke, diss->ver*1/100, diss->rot);
               diss->breseline( x_koordinate_der_marke, diss->ver*99/100, x_koordinate_der_marke, diss->ver,       diss->rot);
               diss->set_text_pt( 20);
-              diss->main32( label, x_koordinate_der_marke, diss->ver-diss->ver/100.0, 10.0);
+              diss->freetype_text( label, x_koordinate_der_marke, diss->ver-diss->ver/100.0, 10.0);
               if (diss->debug_skala) cerr << labelc << " ";
             }
             if (diss->debug_skala) cerr << endl;
@@ -1481,7 +1538,7 @@ class cabbild : public cbrese {
               diss->breseline( 0,                y_koordinate_der_marke, diss->hor*1/100, y_koordinate_der_marke, diss->gelb);
               diss->breseline( diss->hor*99/100, y_koordinate_der_marke, diss->hor,       y_koordinate_der_marke, diss->gelb);
               diss->set_text_pt( 20);
-              diss->main32( label, diss->hor/100.0, y_koordinate_der_marke, 10.0);
+              diss->freetype_text( label, diss->hor/100.0, y_koordinate_der_marke, 10.0);
               if (diss->debug_skala) cerr << labelc << " ";
             }
             if (diss->debug_skala) cerr << endl;
@@ -1559,12 +1616,20 @@ class ctitel : public cabbild {
   ctitel( int hor, int ver, int deep, string progname) : cabbild( hor, ver, deep, progname) {}
   ctitel() {}
   bool debug_ctitel;
+  bool debug_svg_titel;
   void drucke_einen_titel( u32string worte) {
     debug_ctitel = false;
     if (debug_ctitel) cerr << "T010 " << worte.c_str() << " " << (worte.size()>0?worte.c_str()[0]:'x') << endl;
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
     // u32string worte = U"Titel AäöüßÄÖłżźśńęąEфывапролджэ";
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", worte, hor/5, +60, 0);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", worte, hor/5, +60, 0);
+//  svg_text( worte, 40, hor/5, +60, 0, 0, 0);
+//  svg_text( "Wo erscheint dieser Text?", 40, hor/5, +60, 0, 0, 0);
+  }
+  void svg_titel( string titel_worte) {
+    debug_svg_titel = false;
+    if (debug_svg_titel) cerr << "T020 " << titel_worte << endl;
+    svg_text( titel_worte, 40, hor/5, +60, 0, 0, 0);
   }
 };
 
@@ -1641,8 +1706,7 @@ class cturtle : public ctitel {
   double turtle_y() {       return igel_ort.y;   } 
   void closeturtle() {
     if (svg_datei.is_open()) {
-      svg_datei << "</svg>" << endl;
-      svg_datei.close();
+      svg_close();
       cout << "i090" << " closing svg_dateiname= " << svg_dateiname << endl;
     }
   }
@@ -1694,8 +1758,8 @@ class cerprobe_true_type_font : public ctrue_type_font {
   }
   void druck_eine_zeile( u32string wort, double xx, double yy, double ww) {
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
-    main32( wort, xx, yy,  ww+6);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", wort, xx, yy,  ww);
+    freetype_text( wort, xx, yy,  ww+6);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", wort, xx, yy,  ww);
     druck_pnm( "/tmp/turtle/turtle-004-cerprobe_true_type_font-01.pnm");
   }
   void eine_methode_von_cerprobe_true_type_font_ruft( string wort) {
@@ -1706,10 +1770,10 @@ class cerprobe_true_type_font : public ctrue_type_font {
     u32string text32;
 
     text32 = chararray_to_u32string( text1);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 700,  -4);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 700,  -4);
 
     text32 = utf8chars_to_u32string( text2);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 750,  -7);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 750,  -7);
     druck_pnm( "/tmp/turtle/turtle-005-cerprobe_true_type_font-02.pnm");
   }
 
@@ -1724,11 +1788,11 @@ class cerprobe_true_type_font : public ctrue_type_font {
 
     char text[] = "\101\344ABCdefäölüßghixyzLOKj";
     u32string text32 = chararray_to_u32string( text);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", text32,    15, 450,  22);
 
     u32string ein_32wort = U"AäöüßÄÖłżźśńęąEфывапролджэ"; // ruft plot3
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
-    main32( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 600, -15);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 500,  15);
+    freetype_text( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf", ein_32wort, 20, 600, -15);
 
     druck_pnm( "/tmp/turtle/turtle-006-erprobe_true_type_font-03.pnm");
   }
@@ -1881,9 +1945,15 @@ class csierpinski_turtle : public cturtle {
     // Zeichenfläche in int Pixelkoordinaten
     set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
     set_text_pt( 40); set_text_dpi( 100);
-    main32( U"  Wacław Sierpiński - Dreieck", 300, 1000, 60);
+    freetype_text( U"  Wacław Sierpiński - Dreieck", 300, 1000, 60);
     set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
-    main32( U"Sierpinski-Dreiecke", 60, ver, 90);
+    freetype_text( U"Sierpinski-Dreiecke", 60, ver, 90);
+    svg_text( "  Wacław Sierpinski - Dreieck", 80, 300,   1000, -60.0, 300.0,   1000);
+    svg_text( "Sierpiński-Dreiecke",           80,  60,    ver, -90.0,  60.0,    ver);
+    svg_text( "Sierpiński-Dreiecke",           40,  10,    100,   0.0,   0.0,    0.0);
+    svg_text( "-1+1 Sierpiński-Dreiecke",           50,  abbildx( -1.0),    abbildy(  1.0),   0.0,   0.0,    0.0);
+    svg_text( "-1-1 Sierpiński-Dreiecke",           50,  abbildx( -1.0),    abbildy( -1.0),   0.0,   0.0,    0.0);
+    svg_titel( "/tmp/turtle/svg-003.svg");
 
     penstyle( stiftart::AUS);
     move( 2.0);
@@ -1917,9 +1987,9 @@ class cpythagoras_turtle : public cturtle {
     std::cerr << "Z055  progname= " << progname << std::endl;
     // Zeichenfläche in int Pixelkoordinaten
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
-    main32( U"Pythagoras-Baum", 70, ver-10, 0);
+    freetype_text( U"Pythagoras-Baum", 70, ver-10, 0);
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/Ubuntu-BI.ttf");
-    main32( U"Pythagoras-Baum", 50, ver, 90);
+    freetype_text( U"Pythagoras-Baum", 50, ver, 90);
 
     // Zeichenfläche in double Weltkoordinaten
     initturtle( -2.0, -2.0, 5.47, 2.2, "/tmp/turtle/svg-004.svg");
@@ -2114,17 +2184,17 @@ class cerprobe_brese_mit_ctrue_type_font : public cbrese {
     std::cerr << "Z058  cerprobe_brese_mit_ctrue_type_font( string) progname= " << progname << std::endl;
 
     set_text_font( "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf");
-//  set_text_pt( 100); set_text_dpi( 400); main32( U"Ägp|", 0, 1079 - 194, 0.0/*Grad*/);
-    set_text_pt( 100); set_text_dpi( 550); main32( U"Ägp|" , 0, 1079 -   0, 0.0/*Grad*/);
+//  set_text_pt( 100); set_text_dpi( 400); freetype_text( U"Ägp|", 0, 1079 - 194, 0.0/*Grad*/);
+    set_text_pt( 100); set_text_dpi( 550); freetype_text( U"Ägp|" , 0, 1079 -   0, 0.0/*Grad*/);
     set_text_pt( 50); set_text_dpi( 100);
       set_textfarbe( magenta);
-//  main32( wort,                                            xx,  yy,   ww);
-    main32( U"erprobe_brese_DéjàVuSerif.ttf 50, 550, +13", 50, 550,  +13);
+//  freetype_text( wort,                                            xx,  yy,   ww);
+    freetype_text( U"erprobe_brese_DéjàVuSerif.ttf 50, 550, +13", 50, 550,  +13);
     druck_pnm( "/tmp/turtle/turtle-011-cerprobe_brese_mit_ctrue_type_font-01.pnm");
 
     set_text_font( "/usr/share/fonts/truetype/ubuntu-font-family/UbuntuMono-R.ttf");
       set_textfarbe( gelb);
-    main32( U"cerprobe_brese_UbuntuMono-R.ttf 50, 550, -13", 50, 50,  -13);
+    freetype_text( U"cerprobe_brese_UbuntuMono-R.ttf 50, 550, -13", 50, 50,  -13);
     druck_pnm( "/tmp/turtle/turtle-012-cerprobe_brese_mit_ctrue_type_font-02.pnm");
 
     // Zeichne ein Kreuz aus Diagonalen
@@ -2231,9 +2301,8 @@ class cerprobe_svg : public cabbild {
         );
     string sworte;
     sworte = "..... s äöüßÄÖÜł";
-    char cworte[] = "c äöüßÄÖÜł";
     for (double ww = 0.0; ww < 360.0; ww+=30.0) {
-      svg_text( sworte, 1000, 545,  ww, 1000, 545);
+      svg_text( sworte, 40, 1000, 545,  ww, 1000, 545);
     }
     svg_close();
   }
@@ -3488,11 +3557,11 @@ if (alle_proben) {
   ckoch_turtle                       rufe( "koch "     + pathname + "/" + progname, "", 1920, 1080, 65535);
   cpythagoras_turtle                 ruff( "pytha "    + pathname + "/" + progname, "", 1920, 1080, 65535);
 }
-if (alle_proben) {
   csierpinski_turtle                 rufg( "sierp "    + pathname + "/" + progname, "", 1920, 1080, 65535);
+if (alle_proben) {
   csierpinski_ohne_turtle            rufh( "sierp2 "   + pathname + "/" + progname, "", 1600,  900, 65535);
-}
   capfelmann                         rufi( "apfel "    + pathname + "/" + progname, "", 1920, 1080, 65535);
+}
 if (alle_proben) {
 }
 /*
